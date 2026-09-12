@@ -40,9 +40,7 @@ def _direct_imports(path: Path) -> set[str]:
 
 
 def _import_graph() -> dict[str, set[str]]:
-    return {
-        _module_name(path): _direct_imports(path) for path in PACKAGE_ROOT.rglob("*.py")
-    }
+    return {_module_name(path): _direct_imports(path) for path in PACKAGE_ROOT.rglob("*.py")}
 
 
 def _reachable(graph: dict[str, set[str]], start: str) -> dict[str, list[str]]:
@@ -72,9 +70,7 @@ def test_api_cannot_reach_offline_modules() -> None:
             if module.startswith(FORBIDDEN):
                 violations.append(" -> ".join(chain))
 
-    assert not violations, "online path reaches offline modules:\n" + "\n".join(
-        sorted(violations)
-    )
+    assert not violations, "online path reaches offline modules:\n" + "\n".join(sorted(violations))
 
 
 def test_online_pipeline_cannot_reach_offline_pipeline() -> None:
@@ -99,8 +95,6 @@ def test_schemas_depend_on_nothing_but_schemas() -> None:
         if not module.startswith("rag.schemas"):
             continue
         outside = {
-            i
-            for i in imports
-            if not (i.startswith("rag.schemas") or i.startswith("rag.utils"))
+            i for i in imports if not (i.startswith("rag.schemas") or i.startswith("rag.utils"))
         }
         assert not outside, f"{module} imports {sorted(outside)}"

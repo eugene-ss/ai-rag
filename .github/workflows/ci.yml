@@ -28,9 +28,15 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+          # Without this the matrix is decorative: every job resolves to the
+          # same default interpreter.
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev
+
+      - name: Confirm the interpreter under test
+        run: uv run python -c "import sys; assert sys.version.startswith('${{ matrix.python-version }}'), sys.version; print(sys.version)"
 
       - name: Lint
         run: |

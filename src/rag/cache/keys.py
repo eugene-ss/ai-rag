@@ -54,3 +54,23 @@ def cache_key(
     )
     raw = f"{scope}|{normalize_query(query)}"
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def agent_cache_params(
+    *,
+    mode: str,
+    allow_egress: bool,
+    tool_names: list[str],
+    budget: dict[str, object],
+) -> dict[str, object]:
+    """Params that must enter the answer-cache scope for agent turns.
+
+    Without these, two agent configurations (different tools or budget caps)
+    would collide on the same query key.
+    """
+    return {
+        "mode": mode,
+        "allow_egress": allow_egress,
+        "tools": sorted(tool_names),
+        "budget": budget,
+    }

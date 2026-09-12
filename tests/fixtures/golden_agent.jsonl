@@ -1,0 +1,2 @@
+{"id": "a1", "question": "What is hybrid retrieval?", "relevant_doc_ids": ["hybrid_retrieval"], "reference_answer": "Hybrid retrieval combines dense and lexical search.", "expected_tools": ["retrieval_search"]}
+{"id": "a2", "question": "Compare hybrid retrieval and dense-only search.", "relevant_doc_ids": ["hybrid_retrieval"], "reference_answer": "Hybrid retrieval fuses dense and lexical signals; dense-only misses exact tokens.", "expected_tools": ["retrieval_search"]}

@@ -68,6 +68,26 @@ jobs:
             --index-source tests/fixtures/corpus \
             --min-recall 0.8
 
+  agent-quality-gate:
+    name: agent quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      # Agent regressions show up as step/cost inflation, not only wrong answers.
+      - name: Hermetic agent evaluation
+        run: |
+          uv run rag eval-agent \
+            --dataset tests/fixtures/golden_agent.jsonl \
+            --index-source tests/fixtures/corpus \
+            --max-avg-steps 4 \
+            --max-avg-cost 0.05 \
+            --min-success-rate 1.0
+
   container:
     name: docker build
     runs-on: ubuntu-latest

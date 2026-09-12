@@ -275,6 +275,7 @@ returns 503 with no index. Evaluation is a build gate, the same as a unit test.
 | | |
 |---|---|
 | [Architecture](docs/architecture.md) | diagrams and the reasoning behind the split |
+| [Agentic RAG](docs/agentic.md) | bounded agent as a third subsystem |
 | [Contracts](docs/contracts.md) | what `Document`, `Chunk`, `Answer` guarantee |
 | [Offline pipeline](docs/offline-pipeline.md) | ingest → parse → chunk → embed → index |
 | [Online pipeline](docs/online-pipeline.md) | rewrite → retrieve → rerank → generate → refuse |

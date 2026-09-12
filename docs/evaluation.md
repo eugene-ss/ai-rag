@@ -38,6 +38,18 @@ Prefer `relevant_doc_ids` for a dataset you intend to keep: chunk ids change
 whenever chunking parameters change, so a chunk-id dataset silently rots after a
 chunker upgrade.
 
+### Agent golden examples
+
+Agent eval adds `expected_tools` so tool-selection precision is measurable:
+
+```json
+{"id": "a1", "question": "Compare hybrid and dense retrieval.", "relevant_doc_ids": ["hybrid_retrieval"], "expected_tools": ["retrieval_search"]}
+```
+
+Deterministic agent CI uses `EchoChatLLM` and gates on **average steps and cost**,
+not only task success — a change that doubles steps is a regression even when
+answers still pass. See [agentic.md](agentic.md).
+
 Two locations, on purpose:
 
 - `tests/fixtures/golden.jsonl` — tiny, committed, runs in CI, no external services

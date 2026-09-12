@@ -12,8 +12,10 @@ VectorBackend = Literal["memory", "qdrant"]
 LexicalBackend = Literal["memory", "opensearch"]
 EmbeddingBackend = Literal["hash", "openai"]
 LLMBackend = Literal["echo", "openai"]
+ChatLLMBackend = Literal["echo", "openai"]
 CacheBackend = Literal["memory", "redis"]
 RerankerName = Literal["identity", "cross_encoder"]
+QueryMode = Literal["auto", "fast", "agent"]
 
 PRODUCTION_ENVS = frozenset({"prod", "production", "staging", "stage"})
 
@@ -98,8 +100,24 @@ class Settings(BaseSettings):
     lexical_backend: LexicalBackend = "memory"
     embedding_backend: EmbeddingBackend = "hash"
     llm_backend: LLMBackend = "echo"
+    chat_llm_backend: ChatLLMBackend = "echo"
     cache_backend: CacheBackend = "memory"
     reranker: RerankerName = "identity"
+
+    # --- agent -------------------------------------------------------------
+    agent_enabled: bool = True
+    agent_default_mode: QueryMode = "auto"
+    agent_allow_egress: bool = False
+    agent_include_trace: bool = False
+    agent_max_steps: int = 6
+    agent_max_tool_calls: int = 10
+    agent_max_critique_rounds: int = 2
+    agent_max_tokens: int = 20_000
+    agent_max_cost_usd: float = 0.10
+    agent_max_wall_clock_seconds: float = 30.0
+    agent_tool_cache_enabled: bool = True
+    agent_tool_cache_ttl_seconds: int = 600
+    agent_max_concurrent_per_tenant: int = 4
 
     # --- retrieval ---------------------------------------------------------
     top_k: int = 10
@@ -187,6 +205,16 @@ class Settings(BaseSettings):
             )
         if self.llm_backend == "echo":
             problems.append("RAG_LLM_BACKEND=echo is a test stub, not a real model")
+        if self.agent_enabled and self.chat_llm_backend == "echo":
+            problems.append(
+                "RAG_AGENT_ENABLED requires RAG_CHAT_LLM_BACKEND!=echo outside "
+                "dev: the agent must not run on a stub chat model in production"
+            )
+        if self.agent_allow_egress:
+            problems.append(
+                "RAG_AGENT_ALLOW_EGRESS must be false outside dev until egress "
+                "tools are explicitly provisioned and audited"
+            )
         if problems:
             joined = "\n  - ".join(problems)
             msg = f"Unsafe configuration for env={self.env!r}:\n  - {joined}"
@@ -215,6 +243,19 @@ class Settings(BaseSettings):
 
     def index_registry_path(self) -> Path:
         return self.index_registry_file or (self.configs_root / "index_versions.yaml")
+
+    def agent_budget(self) -> "Budget":
+        """Server-side ceiling for agent turns; caller budgets are clamped to this."""
+        from rag.agent.budget import Budget
+
+        return Budget(
+            max_steps=self.agent_max_steps,
+            max_tool_calls=self.agent_max_tool_calls,
+            max_critique_rounds=self.agent_max_critique_rounds,
+            max_tokens=self.agent_max_tokens,
+            max_cost_usd=self.agent_max_cost_usd,
+            max_wall_clock_seconds=self.agent_max_wall_clock_seconds,
+        )
 
 
 @lru_cache

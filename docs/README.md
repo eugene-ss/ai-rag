@@ -9,6 +9,7 @@ online serving are separate systems joined by a contract.
 | Document | Read it when you want to |
 |---|---|
 | [architecture.md](architecture.md) | Understand the whole system and see the diagrams |
+| [agentic.md](agentic.md) | Bounded agent as a third subsystem |
 | [contracts.md](contracts.md) | Know exactly what `Document`, `Chunk`, `Answer` guarantee |
 | [offline-pipeline.md](offline-pipeline.md) | Change ingestion, parsing, chunking, or indexing |
 | [online-pipeline.md](online-pipeline.md) | Change query handling, generation, or refusal |

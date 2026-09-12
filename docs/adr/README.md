@@ -12,6 +12,7 @@ still holds.
 | [0004](0004-index-versioning.md) | Index versions with alias-based promotion |
 | [0005](0005-refusal-as-a-feature.md) | Refusal is a normal return value |
 | [0006](0006-protocol-based-backends.md) | Protocols with dependency-free defaults |
+| [0007](0007-agent-as-third-subsystem.md) | Bounded agent as a third subsystem |
 
 Format: context, decision, consequences. Kept short on purpose — an ADR nobody
 reads is worse than no ADR.

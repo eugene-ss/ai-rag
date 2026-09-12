@@ -73,6 +73,21 @@ def test_api_cannot_reach_offline_modules() -> None:
     assert not violations, "online path reaches offline modules:\n" + "\n".join(sorted(violations))
 
 
+def test_agent_cannot_reach_offline_modules() -> None:
+    """The agent is on the request path — same transitive rule as the API."""
+    graph = _import_graph()
+    agent_modules = [m for m in graph if m == "rag.agent" or m.startswith("rag.agent.")]
+    assert agent_modules, "no agent modules discovered"
+
+    violations: list[str] = []
+    for entry in agent_modules:
+        for module, chain in _reachable(graph, entry).items():
+            if module.startswith(FORBIDDEN):
+                violations.append(" -> ".join(chain))
+
+    assert not violations, "agent path reaches offline modules:\n" + "\n".join(sorted(violations))
+
+
 def test_online_pipeline_cannot_reach_offline_pipeline() -> None:
     graph = _import_graph()
     reachable = _reachable(graph, "rag.pipelines.online")

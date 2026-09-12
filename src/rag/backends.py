@@ -7,6 +7,7 @@ process and the offline jobs are wired identically from the same configuration.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from rag.cache.base import Cache
 from rag.cache.memory import MemoryCache
@@ -25,6 +26,12 @@ from rag.rerank.identity import IdentityReranker
 from rag.settings import Settings, get_settings
 from rag.vectordb.base import VectorStore
 from rag.vectordb.memory import MemoryVectorStore
+
+if TYPE_CHECKING:
+    from rag.agent.runtime import AgentRuntime
+    from rag.agent.tools import ToolRegistry
+    from rag.llm.chat import ChatLLM
+    from rag.pipelines.online import OnlinePipeline
 
 log = get_logger("backends")
 
@@ -97,6 +104,90 @@ def build_llm(settings: Settings) -> LLMClient:
             policy=policy,
         )
     return ResilientLLM(EchoLLM(), policy=policy)
+
+
+def build_chat_llm(settings: Settings) -> ChatLLM:
+    """Async chat model used by the agent planner and critic."""
+    from rag.llm.echo_chat import EchoChatLLM
+    from rag.llm.resilient_chat import ResilientChatLLM
+
+    policy = RetryPolicy(
+        max_attempts=settings.llm_max_attempts,
+        timeout_seconds=settings.llm_timeout_seconds,
+    )
+    if settings.chat_llm_backend == "openai":
+        from rag.llm.openai_chat import OpenAIChatLLM
+
+        def make(model: str) -> ChatLLM:
+            return OpenAIChatLLM(
+                model=model,
+                api_key=settings.openai_api_key,
+                timeout=settings.llm_timeout_seconds,
+                max_output_tokens=settings.llm_max_output_tokens,
+                temperature=settings.llm_temperature,
+            )
+
+        return ResilientChatLLM(
+            make(settings.llm_model),
+            fallbacks=[make(m) for m in settings.llm_fallback_models],
+            policy=policy,
+        )
+    return ResilientChatLLM(EchoChatLLM(), policy=policy)
+
+
+def build_tool_registry(
+    settings: Settings,
+    pipeline: OnlinePipeline,
+    *,
+    cache: Cache | None = None,
+) -> ToolRegistry:
+    from rag.agent.tools import (
+        GraphQueryTool,
+        RetrievalTool,
+        ToolRegistry,
+        ToolResultCache,
+        WebSearchTool,
+    )
+
+    result_cache = None
+    if cache is not None and settings.agent_tool_cache_enabled:
+        result_cache = ToolResultCache(
+            cache,
+            ttl_seconds=settings.agent_tool_cache_ttl_seconds,
+            enabled=True,
+        )
+    return ToolRegistry(
+        [RetrievalTool(pipeline), WebSearchTool(), GraphQueryTool()],
+        result_cache=result_cache,
+    )
+
+
+def build_agent_runtime(
+    settings: Settings,
+    pipeline: OnlinePipeline,
+    *,
+    chat_llm: ChatLLM | None = None,
+    tools: ToolRegistry | None = None,
+    cache: Cache | None = None,
+) -> AgentRuntime | None:
+    """Build the agent subsystem, or None when disabled."""
+    if not settings.agent_enabled:
+        return None
+    from rag.agent import AgentRuntime, Critic
+
+    chat = chat_llm or build_chat_llm(settings)
+    registry = tools or build_tool_registry(
+        settings, pipeline, cache=cache or pipeline.cache
+    )
+    return AgentRuntime(
+        chat_llm=chat,
+        tools=registry,
+        pipeline=pipeline,
+        critic=Critic(chat),
+        budget=settings.agent_budget(),
+        allow_egress=settings.agent_allow_egress,
+        include_trace=settings.agent_include_trace,
+    )
 
 
 def build_cache(settings: Settings) -> Cache:

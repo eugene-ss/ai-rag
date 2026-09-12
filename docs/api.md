@@ -44,6 +44,18 @@ Request:
 | Field | Type | Constraints |
 |---|---|---|
 | `query` | string | 1–4000 characters |
+| `mode` | string | `auto` (default), `fast`, or `agent` |
+| `max_steps` | int? | optional agent budget; clamped by server ceiling |
+| `max_tool_calls` | int? | optional agent budget |
+| `max_critique_rounds` | int? | optional agent budget |
+| `max_tokens` | int? | optional agent budget |
+| `max_cost_usd` | float? | optional agent budget |
+| `max_wall_clock_seconds` | float? | optional agent budget |
+
+`mode=auto` elevates only `COMPLEX` routes to the agent. `fast` always uses the
+deterministic online pipeline. `agent` forces the bounded agent when enabled.
+Caller budgets are never raised above the server ceiling. See
+[agentic.md](agentic.md).
 
 Response `200`:
 

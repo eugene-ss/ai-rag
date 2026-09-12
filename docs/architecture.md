@@ -1,24 +1,29 @@
 # Architecture
 
-A production RAG system is **two systems joined by a contract**, not one
+A production RAG system is **three subsystems joined by contracts**, not one
 application with a vector database attached.
 
-| | Offline pipeline | Online pipeline |
-|---|---|---|
-| Runs as | `jobs/` (CLI, cron, worker container) | `api/` (FastAPI process) |
-| Trigger | schedule or explicit operator action | user request |
-| Latency budget | minutes to hours | milliseconds |
-| Writes to the index | yes | **never** |
-| Failure blast radius | one index version | one request |
+| | Offline pipeline | Online pipeline | Agent runtime |
+|---|---|---|---|
+| Runs as | `jobs/` (CLI, cron, worker) | `api/` (FastAPI) | `api/` (same process, gated) |
+| Trigger | schedule / operator | user request | COMPLEX route or `mode=agent` |
+| Latency budget | minutes to hours | milliseconds | seconds, hard-capped |
+| Writes to the index | yes | **never** | **never** |
+| Failure blast radius | one index version | one request | one request (falls back) |
+
+The online pipeline remains the default, fixed-cost path. The agent *composes*
+it (retrieval as a tool, answer as fallback) and is refused in production until a
+real `ChatLLM` is configured. See [agentic.md](agentic.md) and
+[ADR 0007](adr/0007-agent-as-third-subsystem.md).
 
 The contract between them is `src/rag/schemas/`: `Document`, `Chunk`,
 `QueryResult`, `Answer`, `Principal`, `AclTags`. Either side can be rewritten
 without touching the other as long as the contract holds.
 
 `tests/test_architecture_boundaries.py` builds the **transitive** import graph of
-the `rag` package and fails the build if anything under `rag.api` can reach
-`rag.ingestion`, `rag.parsing`, `rag.chunking`, `rag.eval`, or `rag.jobs` by any
-path. Importing `rag.api.app` loads zero offline modules.
+the `rag` package and fails the build if anything under `rag.api` **or**
+`rag.agent` can reach `rag.ingestion`, `rag.parsing`, `rag.chunking`, `rag.eval`,
+or `rag.jobs` by any path. Importing `rag.api.app` loads zero offline modules.
 
 Transitivity is the part that matters. A direct-import check passes while
 `pipelines/__init__.py` quietly re-exports both pipelines and pulls every parser

@@ -78,6 +78,13 @@ eval-gate min_recall="0.8":
     uv run rag eval --dataset tests/fixtures/golden.jsonl \
         --index-source tests/fixtures/corpus --min-recall {{min_recall}}
 
+# Hermetic agent gate: EchoChatLLM, fail on step/cost regressions.
+eval-agent:
+    uv run rag eval-agent \
+        --dataset tests/fixtures/golden_agent.jsonl \
+        --index-source tests/fixtures/corpus \
+        --max-avg-steps 4 --max-avg-cost 0.05 --min-success-rate 1.0
+
 # --- demo --------------------------------------------------------------------
 
 # Zero-dependency end-to-end demo: index the sample corpus, then evaluate it.

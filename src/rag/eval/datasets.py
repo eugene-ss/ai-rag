@@ -14,6 +14,7 @@ class GoldenExample(BaseModel):
     relevant_doc_ids: list[str] = Field(default_factory=list)
     relevant_chunk_ids: list[str] = Field(default_factory=list)
     reference_answer: str | None = None
+    expected_tools: list[str] = Field(default_factory=list)
     metadata: dict[str, str] = Field(default_factory=dict)
 
 

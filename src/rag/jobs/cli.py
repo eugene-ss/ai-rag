@@ -65,6 +65,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit non-zero if Recall@5 falls below this (for CI gating)",
     )
 
+    agent_p = sub.add_parser(
+        "eval-agent",
+        help="Run hermetic agent evaluation (EchoChatLLM; gates steps/cost)",
+    )
+    agent_p.add_argument(
+        "--dataset", type=Path, default=Path("tests/fixtures/golden_agent.jsonl")
+    )
+    agent_p.add_argument(
+        "--index-source",
+        type=Path,
+        default=Path("tests/fixtures/corpus"),
+        help="Index this source first (required for in-memory backends)",
+    )
+    agent_p.add_argument("--max-avg-steps", type=float, default=4.0)
+    agent_p.add_argument("--max-avg-cost", type=float, default=0.05)
+    agent_p.add_argument("--min-success-rate", type=float, default=1.0)
+
     return parser
 
 
@@ -132,6 +149,29 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
+        return 0
+
+    if args.command == "eval-agent":
+        from rag.jobs.agent_eval import format_report as format_agent_report
+        from rag.jobs.agent_eval import run_agent_eval
+
+        if not args.dataset.exists():
+            print(f"error: dataset not found: {args.dataset}", file=sys.stderr)
+            return 2
+        context = BackendContext.from_settings(settings)
+        try:
+            report = run_agent_eval(
+                args.dataset,
+                context=context,
+                index_source=args.index_source,
+                max_avg_steps=args.max_avg_steps,
+                max_avg_cost=args.max_avg_cost,
+                min_success_rate=args.min_success_rate,
+            )
+        except SystemExit as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(format_agent_report(report))
         return 0
 
     return 1

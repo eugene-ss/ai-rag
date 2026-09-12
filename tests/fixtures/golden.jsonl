@@ -1,0 +1,3 @@
+{"id": "g1", "question": "What is hybrid retrieval?", "relevant_doc_ids": ["hybrid_retrieval"], "reference_answer": "Hybrid retrieval combines dense and lexical search."}
+{"id": "g2", "question": "Why keep offline and online pipelines separate?", "relevant_doc_ids": ["pipeline_separation"], "reference_answer": "So indexing never runs inside production request handlers."}
+{"id": "g3", "question": "What does ACL pushdown mean?", "relevant_doc_ids": ["acl_security"], "reference_answer": "Filters are applied inside the vector and lexical backends before results return."}

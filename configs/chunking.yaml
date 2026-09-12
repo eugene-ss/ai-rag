@@ -1,0 +1,19 @@
+default_strategy: recursive
+chunker_version: "1.0"
+strategies:
+  text/plain:
+    strategy: fixed
+    size: 512
+    overlap: 64
+  text/markdown:
+    strategy: markdown_aware
+    size: 800
+    overlap: 80
+  application/pdf:
+    strategy: recursive
+    size: 600
+    overlap: 80
+  text/html:
+    strategy: recursive
+    size: 600
+    overlap: 80

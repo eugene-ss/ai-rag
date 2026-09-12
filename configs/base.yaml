@@ -1,0 +1,6 @@
+env: dev
+index_version: v1
+collection_alias: docs_live
+data_root: data
+refusal_score_threshold: 0.01
+log_level: INFO

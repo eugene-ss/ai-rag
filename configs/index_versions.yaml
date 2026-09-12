@@ -1,0 +1,7 @@
+active: v1
+versions:
+  v1:
+    collection: docs__v1
+    alias: docs_live
+    status: active
+    created_at: "2026-01-01T00:00:00Z"

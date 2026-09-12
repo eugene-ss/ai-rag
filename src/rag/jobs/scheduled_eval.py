@@ -2,61 +2,59 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rag.cache.memory import MemoryCache
-from rag.eval.report import format_report
+from rag.backends import BackendContext
+from rag.eval.report import EvalReport, format_report
 from rag.eval.runner import EvalRunner
 from rag.generation.grounded import generate_grounded
-from rag.jobs.reindex import EMBEDDER, LEXICAL_INDEX, VECTOR_STORE
-from rag.llm.echo import EchoLLM
 from rag.observability.logging import get_logger
-from rag.pipelines.online import OnlinePipeline
-from rag.rerank.identity import IdentityReranker
-from rag.retrieval.hybrid import HybridRetriever
-from rag.schemas import Principal
-from rag.settings import get_settings
+from rag.pipelines import online as online_pipeline
+from rag.schemas import Answer, Principal, QueryResult
 
 log = get_logger("jobs.eval")
 
 
-def scheduled_eval(dataset: Path | str) -> str:
-    """Run golden-set evaluation against the current in-process indexes."""
-    settings = get_settings()
-    retriever = HybridRetriever(
-        vector_store=VECTOR_STORE,
-        lexical_index=LEXICAL_INDEX,
-        embedder=EMBEDDER,
-        rrf_k=settings.rrf_k,
-    )
-    pipeline = OnlinePipeline(
-        retriever=retriever,
-        reranker=IdentityReranker(),
-        llm=EchoLLM(),
-        cache=MemoryCache(),
-        settings=settings,
-    )
-    principal = Principal(
-        subject="eval",
-        tenant="default",
+def scheduled_eval(
+    dataset: Path | str,
+    *,
+    context: BackendContext | None = None,
+    principal: Principal | None = None,
+) -> EvalReport:
+    """Run golden-set evaluation against the live index.
+
+    Runs as a job, not in the request path, so it can be scheduled nightly and
+    gate a version promotion.
+    """
+    ctx = context or BackendContext.from_settings()
+    pipeline = online_pipeline.from_context(ctx)
+    who = principal or Principal(
+        subject="scheduled-eval",
+        tenant=ctx.settings.default_tenant,
         groups=frozenset({"public"}),
     )
 
-    def retrieve_fn(question: str):  # type: ignore[no-untyped-def]
-        return pipeline.retrieve_only(question, principal=principal)
+    def retrieve_fn(question: str) -> QueryResult:
+        return pipeline.retrieve_only(question, principal=who)
 
-    def generate_fn(question: str, qr):  # type: ignore[no-untyped-def]
+    def generate_fn(question: str, result: QueryResult) -> Answer:
         return generate_grounded(
             question=question,
-            scored=qr.results,
+            scored=result.results,
             llm=pipeline.llm,
-            score_threshold=settings.refusal_score_threshold,
+            score_threshold=ctx.settings.refusal_score_threshold,
+            redact=ctx.settings.pii_redaction_enabled,
         )
 
-    runner = EvalRunner(retrieve_fn=retrieve_fn, generate_fn=generate_fn)
-    report = runner.run(dataset)
+    report = EvalRunner(retrieve_fn=retrieve_fn, generate_fn=generate_fn).run(dataset)
     log.info(
-        "eval complete n=%s recall@5=%.3f faithfulness=%.3f",
+        "eval complete n=%s recall@5=%.3f mrr=%.3f faithfulness=%.3f refusal_rate=%.3f",
         report.n,
         report.recall_at_5,
+        report.mrr,
         report.faithfulness,
+        report.refusal_rate,
     )
+    return report
+
+
+def format_eval(report: EvalReport) -> str:
     return format_report(report)

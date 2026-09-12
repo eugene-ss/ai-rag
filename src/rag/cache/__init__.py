@@ -3,11 +3,13 @@
 from rag.cache.base import Cache
 from rag.cache.keys import cache_key, cache_scope, normalize_query
 from rag.cache.memory import MemoryCache
+from rag.cache.redis import RedisCache
 from rag.cache.semantic import SemanticCache
 
 __all__ = [
     "Cache",
     "MemoryCache",
+    "RedisCache",
     "SemanticCache",
     "cache_key",
     "cache_scope",

@@ -1,0 +1,94 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.8.15"
+
+jobs:
+  quality:
+    name: lint · types · tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Lowest and highest supported versions.
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Typecheck
+        run: uv run mypy src/rag main.py
+
+      - name: Tests
+        run: uv run pytest --cov --cov-report=term-missing
+
+  quality-gate:
+    name: retrieval quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      # Evaluation is a build gate, not a weekend task: a retrieval regression
+      # fails the build the same way a broken test does.
+      - name: Golden-set evaluation
+        run: |
+          uv run rag eval \
+            --dataset tests/fixtures/golden.jsonl \
+            --index-source tests/fixtures/corpus \
+            --min-recall 0.8
+
+  container:
+    name: docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Validate compose file
+        run: docker compose config --quiet
+      - name: Build runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: false
+          load: true
+          tags: ai-rag:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test the image
+        run: |
+          docker run -d --name rag-ci -p 8000:8000 \
+            -e RAG_AUTH_TRUST_HEADERS=true ai-rag:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health; then break; fi
+            sleep 2
+          done
+          curl -sf http://localhost:8000/health
+          # No index is built here, so /ready must report 503, not 200.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/ready)" = "503"
+          docker rm -f rag-ci

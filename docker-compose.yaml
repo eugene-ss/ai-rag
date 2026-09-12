@@ -1,47 +1,86 @@
 # Local production-like stack.
-# The api service serves the online query path only; indexing runs in worker.
+#
+#   docker compose up -d --wait          # api + qdrant + opensearch + redis
+#   docker compose run --rm worker       # offline indexing job
+#
+# The api service serves the online query path only. Indexing runs in `worker`,
+# a separate one-shot container behind the `jobs` profile.
+#
+# Defaults use the stub embedder and LLM so the stack runs with no API key.
+# Export RAG_EMBEDDING_BACKEND=openai, RAG_LLM_BACKEND=openai, and OPENAI_API_KEY
+# to run against real models.
+
+x-backends: &backends
+  RAG_ENV: docker
+  RAG_VECTOR_BACKEND: qdrant
+  RAG_LEXICAL_BACKEND: opensearch
+  RAG_CACHE_BACKEND: redis
+  RAG_EMBEDDING_BACKEND: ${RAG_EMBEDDING_BACKEND:-hash}
+  RAG_LLM_BACKEND: ${RAG_LLM_BACKEND:-echo}
+  RAG_INDEX_VERSION: ${RAG_INDEX_VERSION:-v1}
+  RAG_COLLECTION_ALIAS: docs_live
+  RAG_LOG_LEVEL: ${RAG_LOG_LEVEL:-INFO}
+  QDRANT_URL: http://qdrant:6333
+  OPENSEARCH_URL: http://opensearch:9200
+  REDIS_URL: redis://redis:6379/0
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
 
 services:
   api:
     build:
       context: .
       target: runtime
+    image: ai-rag:local
     ports:
       - "8000:8000"
     environment:
-      RAG_ENV: docker
-      RAG_INDEX_VERSION: v1
-      RAG_COLLECTION_ALIAS: docs_live
-      QDRANT_URL: http://qdrant:6333
-      OPENSEARCH_URL: http://opensearch:9200
-      REDIS_URL: redis://redis:6379/0
+      <<: *backends
+      # Demo stack only: lets you pass X-Tenant/X-Groups without an IdP.
+      # Never enable this in a real deployment.
+      RAG_AUTH_TRUST_HEADERS: "true"
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
       opensearch:
         condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 
   worker:
     build:
       context: .
       target: runtime
-    # Offline pipeline: reindex on demand, never in the request path.
-    command: ["python", "main.py", "reindex", "--source", "/data/raw", "--index-version", "v1"]
-    environment:
-      RAG_ENV: docker
-      QDRANT_URL: http://qdrant:6333
-      OPENSEARCH_URL: http://opensearch:9200
-      REDIS_URL: redis://redis:6379/0
+    image: ai-rag:local
+    # Offline pipeline: build an index version, then flip the alias.
+    command:
+      - python
+      - main.py
+      - reindex
+      - --source
+      - /data/raw
+      - --index-version
+      - ${RAG_INDEX_VERSION:-v1}
+    environment: *backends
     volumes:
+      # Raw data is mounted read-only and lives outside the image.
       - ./data:/data:ro
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
       opensearch:
         condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
     profiles:
       - jobs
 
@@ -51,6 +90,12 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     restart: unless-stopped
 
   opensearch:
@@ -59,6 +104,11 @@ services:
       discovery.type: single-node
       DISABLE_SECURITY_PLUGIN: "true"
       OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+      bootstrap.memory_lock: "true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     ports:
       - "9200:9200"
     volumes:
@@ -67,12 +117,13 @@ services:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 12
+      retries: 24
+      start_period: 20s
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory-policy", "allkeys-lru"]
     ports:
       - "6379:6379"
     healthcheck:

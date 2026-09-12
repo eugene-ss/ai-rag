@@ -1,0 +1,4 @@
+{"id": "g1", "question": "What is hybrid retrieval and why is dense search alone not enough?", "relevant_doc_ids": ["hybrid_retrieval"]}
+{"id": "g2", "question": "Why should the offline and online pipelines stay separate?", "relevant_doc_ids": ["pipeline_separation"]}
+{"id": "g3", "question": "How are chunk-level ACLs enforced during retrieval?", "relevant_doc_ids": ["acl_security"]}
+{"id": "g4", "question": "What is the capital of the moon?", "relevant_doc_ids": [], "should_refuse": true}

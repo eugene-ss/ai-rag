@@ -1,0 +1,21 @@
+# Example static token store for StaticTokenAuthenticator.
+#
+# Copy to configs/auth.yaml (gitignored) and point RAG_AUTH_TOKENS_FILE at it.
+# Tokens are secrets: generate with `openssl rand -hex 32` and never commit them.
+# In a real deployment, replace this authenticator with your IdP (OIDC/JWT).
+
+tokens:
+  - token: "replace-me-acme-engineering"
+    subject: "svc-acme-search"
+    tenant: "acme"
+    groups: ["engineering", "public"]
+
+  - token: "replace-me-acme-hr"
+    subject: "svc-acme-hr"
+    tenant: "acme"
+    groups: ["hr", "public"]
+
+  - token: "replace-me-beta"
+    subject: "svc-beta-search"
+    tenant: "beta"
+    groups: ["public"]

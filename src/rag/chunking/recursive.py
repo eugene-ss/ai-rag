@@ -22,7 +22,7 @@ class RecursiveChunker:
         text = document.text or ""
         if not text:
             return []
-        pieces = self._split(text, size)
+        pieces = self.split_text(text, size)
         chunks: list[Chunk] = []
         cursor = 0
         for ordinal, piece in enumerate(pieces):
@@ -45,7 +45,10 @@ class RecursiveChunker:
             cursor = max(end - overlap, end)
         return chunks
 
-    def _split(self, text: str, size: int, separators: tuple[str, ...] = _SEPARATORS) -> list[str]:
+    def split_text(
+        self, text: str, size: int, separators: tuple[str, ...] = _SEPARATORS
+    ) -> list[str]:
+        """Split text to fit `size`, preferring the largest natural boundary."""
         if len(text) <= size:
             return [text] if text.strip() else []
         sep = separators[0] if separators else ""
@@ -63,7 +66,7 @@ class RecursiveChunker:
                 if current:
                     chunks.append(current)
                 if len(part) > size:
-                    chunks.extend(self._split(part, size, rest))
+                    chunks.extend(self.split_text(part, size, rest))
                     current = ""
                 else:
                     current = part

@@ -1,7 +1,10 @@
 active: v1
 versions:
   v1:
-    collection: docs__v1
     alias: docs_live
+    chunk_count: 3
+    chunker_version: '1.0'
+    collection: docs__v1
+    created_at: '2026-09-12T17:31:20.672333+00:00'
+    embedding_model: hash-64
     status: active
-    created_at: "2026-01-01T00:00:00Z"

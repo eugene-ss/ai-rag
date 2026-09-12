@@ -2,19 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rag.embedding.hash_embedder import HashEmbedder
-from rag.lexical.bm25_memory import BM25MemoryIndex
+from rag.backends import BackendContext
+from rag.index_registry import IndexRegistry
 from rag.observability.logging import get_logger
-from rag.pipelines.offline import OfflinePipeline
-from rag.settings import get_settings
-from rag.vectordb.memory import MemoryVectorStore
+from rag.pipelines import offline as offline_pipeline
+from rag.schemas import AclTags
 
 log = get_logger("jobs.reindex")
-
-# Process-local stores shared with CLI eval when using memory backends.
-VECTOR_STORE = MemoryVectorStore()
-LEXICAL_INDEX = BM25MemoryIndex()
-EMBEDDER = HashEmbedder()
 
 
 def reindex(
@@ -22,17 +16,36 @@ def reindex(
     *,
     index_version: str,
     activate: bool = True,
+    context: BackendContext | None = None,
+    acl: AclTags | None = None,
 ) -> int:
-    """Build into {collection}__{index_version}, then flip alias if activate."""
-    settings = get_settings()
-    pipeline = OfflinePipeline(
-        vector_store=VECTOR_STORE,
-        lexical_index=LEXICAL_INDEX,
-        embedder=EMBEDDER,
-        settings=settings,
-    )
-    chunks = pipeline.run(source, index_version=index_version)
-    if activate:
-        VECTOR_STORE.set_alias(settings.collection_alias, index_version)
-        log.info("alias %s -> %s", settings.collection_alias, index_version)
+    """Build index `index_version` from `source`, optionally flipping the alias.
+
+    Build-then-swap: the live alias only moves after the new version is fully
+    written, so readers never observe a half-built index.
+    """
+    ctx = context or BackendContext.from_settings(index_version=index_version)
+    pipeline = offline_pipeline.from_context(ctx)
+    pipeline.registry = IndexRegistry(ctx.settings.index_registry_path())
+    chunks = pipeline.run(source, index_version=index_version, acl=acl, activate=activate)
     return len(chunks)
+
+
+def activate_version(version: str, *, context: BackendContext | None = None) -> None:
+    """Promote an already-built version, or roll back to a previous one."""
+    ctx = context or BackendContext.from_settings(index_version=version)
+    offline_pipeline.from_context(ctx).activate(version)
+
+
+def list_versions(*, context: BackendContext | None = None) -> list[str]:
+    ctx = context or BackendContext.from_settings()
+    registry = IndexRegistry(ctx.settings.index_registry_path())
+    active = registry.active_version()
+    lines: list[str] = []
+    for v in registry.list_versions():
+        marker = " (active)" if v.version == active else ""
+        lines.append(
+            f"{v.version}\t{v.status}\tchunks={v.chunk_count}\t"
+            f"embedding={v.embedding_model}{marker}"
+        )
+    return lines

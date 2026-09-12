@@ -1,36 +1,39 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Header
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from rag.api.deps import get_state, resolve_principal
-from rag.schemas import Answer
+from rag.api.deps import AppState, get_principal, get_state
+from rag.schemas import Answer, Principal
 
 router = APIRouter(tags=["query"])
 
 
 class QueryRequest(BaseModel):
-    query: str = Field(min_length=1)
+    query: str = Field(min_length=1, max_length=4000, description="Natural-language question")
 
 
 class QueryResponse(BaseModel):
     answer: Answer
 
 
-@router.post("/query", response_model=QueryResponse)
+@router.post(
+    "/query",
+    response_model=QueryResponse,
+    summary="Answer a question over the indexed corpus",
+    description=(
+        "Runs the online pipeline: rewrite, hybrid retrieve, rerank, generate, "
+        "cite. Returns `refused=true` with no citations when the corpus does not "
+        "support an answer. Only chunks the caller's principal may access are "
+        "ever retrieved."
+    ),
+)
 def query(
     body: QueryRequest,
-    authorization: str | None = Header(default=None),
-    x_tenant: str | None = Header(default=None),
-    x_groups: str | None = Header(default=None),
-    x_subject: str | None = Header(default=None),
+    state: Annotated[AppState, Depends(get_state)],
+    principal: Annotated[Principal, Depends(get_principal)],
 ) -> QueryResponse:
-    state = get_state()
-    principal = resolve_principal(
-        authorization=authorization,
-        x_tenant=x_tenant,
-        x_groups=x_groups,
-        x_subject=x_subject,
-    )
     answer = state.pipeline.answer(body.query, principal=principal)
     return QueryResponse(answer=answer)

@@ -19,9 +19,9 @@ logs
 
 docs
 tests
-README.md
 Dockerfile
 docker-compose.yaml
 justfile
 *.md
-!configs/**
+# pyproject declares readme = "README.md", so the build needs it present.
+!README.md

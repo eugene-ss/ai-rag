@@ -1,10 +1,22 @@
+# Retrieval knobs. Environment variables (RAG_*) override these values.
+# Keys must match rag.settings.RetrievalConfig; unknown keys are ignored.
+
+# Candidates fetched from each retrieval leg before fusion.
 top_k: 10
+# Candidates kept after reranking and handed to the model.
 rerank_top_k: 5
+# RRF smoothing constant: higher flattens the influence of top ranks.
 rrf_k: 60
+
+# Relative trust in each leg during fusion.
 dense_weight: 1.0
 lexical_weight: 1.0
-rewrite: true
-multi_query: false
-hyde: false
+
+# Query understanding. Each stage costs latency, so they are opt-in.
+rewrite_enabled: true
+multi_query_enabled: false
+multi_query_count: 3
+hyde_enabled: false
+
 cache_enabled: true
 semantic_cache_enabled: true

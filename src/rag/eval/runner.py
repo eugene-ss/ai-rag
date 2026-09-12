@@ -7,6 +7,7 @@ from typing import Any
 from rag.eval.datasets import GoldenExample, load_golden
 from rag.eval.metrics import answer_relevance, faithfulness, mrr, ndcg_at_k, recall_at_k
 from rag.eval.report import EvalCaseResult, EvalReport
+from rag.observability.tracing import reset_trace
 from rag.schemas import Answer, QueryResult
 
 
@@ -22,6 +23,8 @@ class EvalRunner:
         examples = load_golden(dataset) if isinstance(dataset, (str, Path)) else dataset
         cases: list[EvalCaseResult] = []
         for ex in examples:
+            # One trace per case so a bad example can be traced in isolation.
+            reset_trace()
             qr: QueryResult = self.retrieve_fn(ex.question)
             retrieved_chunk_ids = [s.chunk.chunk_id for s in qr.results]
             retrieved_doc_ids = [s.chunk.doc_id for s in qr.results]

@@ -22,4 +22,6 @@ class RetryPolicy:
         capped = float(min(raw, self.max_delay_seconds))
         if not self.jitter:
             return capped
-        return capped * (0.5 + random.random() / 2)
+        # Jitter spreads retries so concurrent failures do not resynchronize
+        # into a thundering herd. Not security-sensitive.
+        return capped * (0.5 + random.random() / 2)  # noqa: S311

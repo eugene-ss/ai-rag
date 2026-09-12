@@ -37,9 +37,7 @@ class MarkdownAwareChunker:
         ordinal = 0
         cursor = 0
         for section in sections:
-            pieces = (
-                [section] if len(section) <= size else self._fallback._split(section, size)  # noqa: SLF001
-            )
+            pieces = [section] if len(section) <= size else self._fallback.split_text(section, size)
             for piece in pieces:
                 start = text.find(piece, cursor)
                 if start < 0:

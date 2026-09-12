@@ -15,6 +15,7 @@ build/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.xml
 htmlcov/
 .tox/
 .nox/
@@ -24,12 +25,17 @@ htmlcov/
 .env.local
 *.pem
 credentials.json
+# Real token store; only the .example file is tracked.
+configs/auth.yaml
 
-# Data (raw and derived stay out of git; only the layout is tracked)
+# Data: raw and derived content stays out of git. Only the layout, the docs,
+# and example golden sets are tracked.
 data/**
 !data/**/
 !data/README.md
+!data/**/README.md
 !data/**/.gitkeep
+!data/golden/*.example.jsonl
 
 # IDE / OS
 .idea/

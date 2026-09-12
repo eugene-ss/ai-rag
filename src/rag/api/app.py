@@ -4,30 +4,73 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from rag.api.deps import init_state
-from rag.api.errors import RagError, rag_error_handler
+from rag.api.deps import AppState, build_state
+from rag.api.errors import RagError, rag_error_handler, unhandled_error_handler
+from rag.api.middleware import TraceMiddleware
 from rag.api.routes import health, query
-from rag.observability.logging import configure_logging
-from rag.settings import get_settings
+from rag.observability.logging import configure_logging, get_logger
+from rag.settings import Settings, get_settings
+
+log = get_logger("api")
+
+DESCRIPTION = """
+Online query path for the RAG system.
+
+This service is read-only with respect to the index. Ingestion, chunking,
+embedding, and indexing run in the offline `jobs/` process, never here.
+"""
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    settings = get_settings()
-    configure_logging(settings.log_level, settings.log_dir)
-    init_state(settings=settings)
-    yield
+def create_app(
+    *,
+    settings: Settings | None = None,
+    state: AppState | None = None,
+) -> FastAPI:
+    """Build the ASGI app.
 
+    Injecting `state` lets tests supply a pre-built index without touching
+    global process state.
+    """
+    resolved = settings or (state.settings if state else get_settings())
 
-def create_app() -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        configure_logging(resolved.log_level, resolved.log_dir, json_output=resolved.log_json)
+        app.state.rag = state or build_state(settings=resolved)
+        log.info(
+            "api ready env=%s auth=%s vector=%s lexical=%s",
+            resolved.env,
+            app.state.rag.authenticator.name,
+            resolved.vector_backend,
+            resolved.lexical_backend,
+        )
+        try:
+            yield
+        finally:
+            log.info("api shutting down")
+
     application = FastAPI(
         title="Production RAG API",
-        description="Online query path only. Indexing lives in jobs/.",
+        description=DESCRIPTION,
         version="0.1.0",
         lifespan=lifespan,
     )
-    application.add_exception_handler(RagError, rag_error_handler)  # type: ignore[arg-type]
+
+    application.add_middleware(TraceMiddleware)
+    if resolved.cors_allow_origins:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=resolved.cors_allow_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Authorization", "Content-Type", "X-Request-Id"],
+        )
+
+    application.add_exception_handler(RagError, rag_error_handler)
+    application.add_exception_handler(Exception, unhandled_error_handler)
+
     application.include_router(health.router)
     application.include_router(query.router)
     return application

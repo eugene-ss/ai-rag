@@ -1,11 +1,37 @@
+# Reference values for the default (local, dependency-free) profile.
+#
+# This file documents intent. Runtime configuration is read from environment
+# variables via rag.settings.Settings; see .env.example and docs/configuration.md.
+# Secrets never belong here.
+
 env: dev
+service_name: rag-api
+
 index_version: v1
 collection_alias: docs_live
+collection_prefix: docs
 data_root: data
+
+# Stub backends: deterministic, no external services, refused in production.
+vector_backend: memory
+lexical_backend: memory
+embedding_backend: hash
+llm_backend: echo
+cache_backend: memory
+reranker: identity
+
 refusal_score_threshold: 0.01
-log_level: INFO
+
 cache_ttl_seconds: 3600
 semantic_cache_enabled: true
 semantic_cache_threshold: 0.95
+
 llm_max_attempts: 3
 llm_timeout_seconds: 30
+
+# Fail closed by default: no credentials means 401, never anonymous access.
+auth_required: true
+auth_trust_headers: false
+pii_redaction_enabled: true
+
+log_level: INFO

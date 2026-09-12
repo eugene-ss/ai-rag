@@ -1,59 +1,140 @@
+"""Offline jobs CLI: indexing, reindexing, promotion, and evaluation.
+
+Deliberately separate from the API process. Nothing here is reachable from a
+request handler.
+"""
+
 from __future__ import annotations
 
 import argparse
 import sys
 from pathlib import Path
 
-from rag.jobs.reindex import reindex
+from rag.backends import BackendContext
+from rag.eval.report import format_report
+from rag.jobs.reindex import activate_version, list_versions, reindex
 from rag.jobs.scheduled_eval import scheduled_eval
 from rag.observability.logging import configure_logging
-from rag.settings import get_settings
+from rag.schemas import AclTags
+from rag.security.auth import parse_groups
+from rag.settings import Settings, get_settings
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="rag", description="RAG offline jobs")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    ingest_p = sub.add_parser("ingest", help="Ingest and index a source directory")
+    ingest_p.add_argument("--source", type=Path, default=Path("data/raw"))
+    ingest_p.add_argument("--index-version", default=None)
+    ingest_p.add_argument("--tenant", default=None, help="ACL tenant for ingested docs")
+    ingest_p.add_argument("--groups", default=None, help="Comma-separated ACL groups")
+    ingest_p.add_argument(
+        "--no-activate",
+        action="store_true",
+        help="Build without flipping the live alias",
+    )
+
+    reindex_p = sub.add_parser("reindex", help="Rebuild an index version")
+    reindex_p.add_argument("--source", type=Path, default=Path("data/raw"))
+    reindex_p.add_argument("--index-version", required=True)
+    reindex_p.add_argument("--tenant", default=None)
+    reindex_p.add_argument("--groups", default=None)
+    reindex_p.add_argument("--no-activate", action="store_true")
+
+    activate_p = sub.add_parser("activate", help="Promote or roll back to a built version")
+    activate_p.add_argument("--index-version", required=True)
+
+    sub.add_parser("versions", help="List known index versions")
+
+    eval_p = sub.add_parser("eval", help="Run golden-set evaluation")
+    eval_p.add_argument("--dataset", type=Path, default=Path("data/golden/golden.jsonl"))
+    eval_p.add_argument(
+        "--index-source",
+        type=Path,
+        default=None,
+        help=(
+            "Index this source first, in-process. Required with the in-memory "
+            "backends, whose index does not outlive the process."
+        ),
+    )
+    eval_p.add_argument(
+        "--min-recall",
+        type=float,
+        default=None,
+        help="Exit non-zero if Recall@5 falls below this (for CI gating)",
+    )
+
+    return parser
+
+
+def _acl(args: argparse.Namespace, settings: Settings) -> AclTags | None:
+    """ACL stamped onto every document from this run."""
+    if not (args.tenant or args.groups):
+        return None
+    return AclTags(
+        tenant=args.tenant or settings.default_tenant,
+        allow_groups=parse_groups(args.groups, default=frozenset({"public"})),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
-    _settings = get_settings()
-    configure_logging(_settings.log_level, _settings.log_dir)
-    parser = argparse.ArgumentParser(prog="rag", description="RAG offline jobs CLI")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    ingest_p = sub.add_parser("ingest", help="Run offline ingest+index")
-    ingest_p.add_argument("--source", type=Path, default=Path("data/raw"))
-    ingest_p.add_argument("--index-version", default=None)
-
-    reindex_p = sub.add_parser("reindex", help="Rebuild index and flip alias")
-    reindex_p.add_argument("--source", type=Path, default=Path("data/raw"))
-    reindex_p.add_argument("--index-version", required=True)
-    reindex_p.add_argument("--no-activate", action="store_true")
-
-    eval_p = sub.add_parser("eval", help="Run golden-set evaluation")
-    eval_p.add_argument("--dataset", type=Path, default=Path("tests/fixtures/golden.jsonl"))
-
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
     settings = get_settings()
+    configure_logging(settings.log_level, settings.log_dir, json_output=settings.log_json)
 
     if args.command in {"ingest", "reindex"}:
-        version = args.index_version or settings.index_version
-        activate = not getattr(args, "no_activate", False)
-        n = reindex(args.source, index_version=version, activate=activate)
-        print(f"Indexed {n} chunks at version {version}")
+        version = getattr(args, "index_version", None) or settings.index_version
+        context = BackendContext.from_settings(settings, index_version=version)
+        count = reindex(
+            args.source,
+            index_version=version,
+            activate=not args.no_activate,
+            context=context,
+            acl=_acl(args, settings),
+        )
+        print(f"Indexed {count} chunks into version {version}")
+        if count == 0:
+            print(f"warning: no documents found under {args.source}", file=sys.stderr)
+        return 0
+
+    if args.command == "activate":
+        activate_version(args.index_version)
+        print(f"Activated index version {args.index_version}")
+        return 0
+
+    if args.command == "versions":
+        versions = list_versions()
+        print("\n".join(versions) if versions else "No index versions recorded yet")
         return 0
 
     if args.command == "eval":
-        # Ensure corpus is indexed before eval when stores are empty
-        if VECTOR_EMPTY():
-            fixture = Path("tests/fixtures/corpus")
-            if fixture.exists():
-                reindex(fixture, index_version=settings.index_version, activate=True)
-        print(scheduled_eval(args.dataset))
+        if not args.dataset.exists():
+            print(f"error: dataset not found: {args.dataset}", file=sys.stderr)
+            return 2
+        context = BackendContext.from_settings(settings)
+        if args.index_source is not None:
+            reindex(
+                args.index_source,
+                index_version=settings.index_version,
+                activate=True,
+                context=context,
+                acl=AclTags(
+                    tenant=settings.default_tenant,
+                    allow_groups=frozenset({"public"}),
+                ),
+            )
+        report = scheduled_eval(args.dataset, context=context)
+        print(format_report(report))
+        if args.min_recall is not None and report.recall_at_5 < args.min_recall:
+            print(
+                f"error: Recall@5 {report.recall_at_5:.3f} below threshold {args.min_recall:.3f}",
+                file=sys.stderr,
+            )
+            return 1
         return 0
 
     return 1
-
-
-def VECTOR_EMPTY() -> bool:
-    from rag.jobs.reindex import VECTOR_STORE
-
-    return VECTOR_STORE.count() == 0
 
 
 if __name__ == "__main__":

@@ -56,9 +56,21 @@ def span(name: str, **attributes: Any) -> Iterator[dict[str, Any]]:
         _spans.set(existing)
 
 
-def reset_trace() -> str:
-    """Start a fresh trace context; returns the new trace id."""
-    tid = uuid.uuid4().hex
+def reset_trace(trace_id: str | None = None) -> str:
+    """Start a fresh trace context; returns the trace id."""
+    tid = trace_id or uuid.uuid4().hex
     _trace_id.set(tid)
     _spans.set([])
     return tid
+
+
+def start_trace() -> str:
+    """Join the ambient trace if there is one, otherwise start a new one.
+
+    Lets the pipeline keep the request id assigned by the API middleware, so an
+    answer's trace_id matches the access log and the caller's X-Request-Id.
+    """
+    existing = _trace_id.get()
+    if existing:
+        return existing
+    return reset_trace()

@@ -1,7 +1,15 @@
-"""ACL-aware answer caching."""
+"""ACL-aware exact and semantic answer caching."""
 
 from rag.cache.base import Cache
-from rag.cache.keys import cache_key, normalize_query
+from rag.cache.keys import cache_key, cache_scope, normalize_query
 from rag.cache.memory import MemoryCache
+from rag.cache.semantic import SemanticCache
 
-__all__ = ["Cache", "MemoryCache", "cache_key", "normalize_query"]
+__all__ = [
+    "Cache",
+    "MemoryCache",
+    "SemanticCache",
+    "cache_key",
+    "cache_scope",
+    "normalize_query",
+]

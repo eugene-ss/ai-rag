@@ -7,3 +7,4 @@ rewrite: true
 multi_query: false
 hyde: false
 cache_enabled: true
+semantic_cache_enabled: true

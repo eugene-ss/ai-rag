@@ -4,15 +4,18 @@ import time
 from dataclasses import dataclass, field
 
 from rag.cache.base import Cache
-from rag.cache.keys import cache_key
+from rag.cache.keys import cache_key, cache_scope
 from rag.cache.memory import MemoryCache
+from rag.cache.semantic import SemanticCache
 from rag.embedding.base import Embedder
 from rag.embedding.hash_embedder import HashEmbedder
-from rag.generation.base import LLMClient
-from rag.generation.echo import EchoLLM
 from rag.generation.grounded import generate_grounded
 from rag.lexical.base import LexicalIndex
 from rag.lexical.bm25_memory import BM25MemoryIndex
+from rag.llm.base import LLMClient
+from rag.llm.echo import EchoLLM
+from rag.llm.policy import RetryPolicy
+from rag.llm.resilient import ResilientLLM
 from rag.observability.metrics import METRICS
 from rag.observability.tracing import current_trace_id, reset_trace, span
 from rag.query.rewrite import rewrite_query
@@ -36,6 +39,7 @@ class OnlinePipeline:
     cache: Cache
     settings: Settings = field(default_factory=get_settings)
     prompt_version: str = "v1"
+    semantic_cache: SemanticCache | None = None
 
     def answer(self, query: str, *, principal: Principal) -> Answer:
         trace_id = reset_trace()
@@ -46,23 +50,36 @@ class OnlinePipeline:
             or self.settings.index_version
         )
 
+        retrieval_params = {
+            "top_k": cfg.get("top_k", self.settings.top_k),
+            "rerank_top_k": cfg.get("rerank_top_k", self.settings.rerank_top_k),
+        }
         key = cache_key(
             query=query,
             principal=principal,
             index_version=index_version,
             prompt_version=self.prompt_version,
-            retrieval_params={
-                "top_k": cfg.get("top_k", self.settings.top_k),
-                "rerank_top_k": cfg.get("rerank_top_k", self.settings.rerank_top_k),
-            },
+            retrieval_params=retrieval_params,
+        )
+        scope = cache_scope(
+            principal=principal,
+            index_version=index_version,
+            prompt_version=self.prompt_version,
+            retrieval_params=retrieval_params,
         )
 
         if self.settings.cache_enabled:
             cached = self.cache.get(key)
             if cached is not None:
-                METRICS.incr("cache_hit")
+                METRICS.incr("cache_hit", kind="exact")
                 answer = Answer.model_validate_json(cached)
                 return answer.model_copy(update={"trace_id": trace_id})
+            if self.semantic_cache is not None:
+                near = self.semantic_cache.get(query, scope=scope)
+                if near is not None:
+                    METRICS.incr("cache_hit", kind="semantic")
+                    answer = Answer.model_validate_json(near)
+                    return answer.model_copy(update={"trace_id": trace_id})
 
         with span("online_pipeline", trace_id=trace_id) as attrs:
             route = route_query(query)
@@ -119,7 +136,10 @@ class OnlinePipeline:
             answer = answer.model_copy(update={"trace_id": current_trace_id()})
 
             if self.settings.cache_enabled and not answer.refused:
-                self.cache.set(key, answer.model_dump_json(), ttl_seconds=3600)
+                payload = answer.model_dump_json()
+                self.cache.set(key, payload, ttl_seconds=self.settings.cache_ttl_seconds)
+                if self.semantic_cache is not None:
+                    self.semantic_cache.set(query, payload, scope=scope)
 
             METRICS.observe("online_latency_ms", (time.perf_counter() - start) * 1000)
             attrs["refused"] = answer.refused
@@ -178,10 +198,23 @@ def default_online_pipeline(
         dense_weight=settings.dense_weight,
         lexical_weight=settings.lexical_weight,
     )
+    resilient = ResilientLLM(
+        llm or EchoLLM(),
+        policy=RetryPolicy(
+            max_attempts=settings.llm_max_attempts,
+            timeout_seconds=settings.llm_timeout_seconds,
+        ),
+    )
+    semantic = (
+        SemanticCache(embedder=emb, threshold=settings.semantic_cache_threshold)
+        if settings.semantic_cache_enabled
+        else None
+    )
     return OnlinePipeline(
         retriever=retriever,
         reranker=IdentityReranker(),
-        llm=llm or EchoLLM(),
+        llm=resilient,
         cache=MemoryCache(),
         settings=settings,
+        semantic_cache=semantic,
     )

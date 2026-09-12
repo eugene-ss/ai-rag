@@ -5,9 +5,9 @@ from pathlib import Path
 from rag.cache.memory import MemoryCache
 from rag.eval.report import format_report
 from rag.eval.runner import EvalRunner
-from rag.generation.echo import EchoLLM
 from rag.generation.grounded import generate_grounded
 from rag.jobs.reindex import EMBEDDER, LEXICAL_INDEX, VECTOR_STORE
+from rag.llm.echo import EchoLLM
 from rag.observability.logging import get_logger
 from rag.pipelines.online import OnlinePipeline
 from rag.rerank.identity import IdentityReranker
@@ -53,6 +53,10 @@ def scheduled_eval(dataset: Path | str) -> str:
 
     runner = EvalRunner(retrieve_fn=retrieve_fn, generate_fn=generate_fn)
     report = runner.run(dataset)
-    text = format_report(report)
-    log.info("\n%s", text)
-    return text
+    log.info(
+        "eval complete n=%s recall@5=%.3f faithfulness=%.3f",
+        report.n,
+        report.recall_at_5,
+        report.faithfulness,
+    )
+    return format_report(report)

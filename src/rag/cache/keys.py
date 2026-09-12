@@ -12,6 +12,28 @@ def normalize_query(query: str) -> str:
     return re.sub(r"\s+", " ", query.strip().lower())
 
 
+def cache_scope(
+    *,
+    principal: Principal,
+    index_version: str,
+    prompt_version: str,
+    retrieval_params: dict[str, object] | None = None,
+) -> str:
+    """Everything a cache entry depends on except the query text itself.
+
+    The semantic cache buckets entries by scope so a nearest-neighbour match can
+    never cross an ACL, index version, or prompt version boundary.
+    """
+    payload = {
+        "acl": acl_fingerprint(principal),
+        "index_version": index_version,
+        "prompt_version": prompt_version,
+        "params": retrieval_params or {},
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
 def cache_key(
     *,
     query: str,
@@ -24,12 +46,11 @@ def cache_key(
 
     ACL fingerprint is what stops one tenant's answers leaking to another.
     """
-    payload = {
-        "q": normalize_query(query),
-        "acl": acl_fingerprint(principal),
-        "index_version": index_version,
-        "prompt_version": prompt_version,
-        "params": retrieval_params or {},
-    }
-    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    scope = cache_scope(
+        principal=principal,
+        index_version=index_version,
+        prompt_version=prompt_version,
+        retrieval_params=retrieval_params,
+    )
+    raw = f"{scope}|{normalize_query(query)}"
     return hashlib.sha256(raw.encode()).hexdigest()

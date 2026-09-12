@@ -10,19 +10,15 @@ class EchoLLM:
     model_name = "echo"
 
     def complete(self, prompt: str) -> tuple[str, Usage]:
-        # Extract context section if present and summarize naively.
         text = prompt
         if "## Context" in prompt:
             after = prompt.split("## Context", 1)[1]
             if "## Instructions" in after:
                 after = after.split("## Instructions", 1)[0]
             lines = [ln.strip() for ln in after.strip().splitlines() if ln.strip()]
-            # Prefer lines that look like chunk bodies
             body_lines = [ln for ln in lines if not ln.startswith("[") and not ln.startswith("#")]
             if body_lines:
-                # Take first ~2 chunk snippets
                 text = " ".join(body_lines[:4])
-                # Attach chunk markers found in context headers like [chunk_id=...]
                 markers = [ln for ln in lines if ln.startswith("[chunk_id=")]
                 if markers:
                     cites = " ".join(f"[{m.split('=', 1)[1].rstrip(']')}]" for m in markers[:3])
@@ -37,3 +33,19 @@ class EchoLLM:
             model=self.model_name,
         )
         return text, usage
+
+
+class FlakyLLM:
+    """Test double that fails a fixed number of times before succeeding."""
+
+    def __init__(self, *, fail_times: int, model_name: str = "flaky") -> None:
+        self.model_name = model_name
+        self.fail_times = fail_times
+        self.calls = 0
+
+    def complete(self, prompt: str) -> tuple[str, Usage]:
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            msg = f"{self.model_name} transient failure {self.calls}"
+            raise RuntimeError(msg)
+        return f"ok from {self.model_name}", Usage(model=self.model_name)

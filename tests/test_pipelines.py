@@ -4,8 +4,8 @@ from pathlib import Path
 
 from rag.cache.memory import MemoryCache
 from rag.embedding.hash_embedder import HashEmbedder
-from rag.generation.echo import EchoLLM
 from rag.lexical.bm25_memory import BM25MemoryIndex
+from rag.llm.echo import EchoLLM
 from rag.pipelines.offline import OfflinePipeline
 from rag.pipelines.online import OnlinePipeline
 from rag.rerank.identity import IdentityReranker
@@ -32,6 +32,8 @@ def test_offline_then_online_smoke() -> None:
     chunks = offline.run(FIXTURES, index_version="v1")
     assert len(chunks) >= 3
     assert vs.resolve_alias("docs_live") == "v1"
+    # Embedding model is stamped so a model swap invalidates the index.
+    assert {c.embedding_model for c in chunks} == {emb.model_name}
 
     online = OnlinePipeline(
         retriever=HybridRetriever(vector_store=vs, lexical_index=lx, embedder=emb),
@@ -47,6 +49,19 @@ def test_offline_then_online_smoke() -> None:
     if not answer.refused:
         assert answer.citations
         assert "hybrid" in answer.text.lower() or answer.citations
+
+
+def test_offline_accepts_relative_source_path() -> None:
+    """File URIs need absolute paths; a relative source must still work."""
+    relative = FIXTURES.relative_to(Path.cwd()) if FIXTURES.is_relative_to(Path.cwd()) else FIXTURES
+    offline = OfflinePipeline(
+        vector_store=MemoryVectorStore(),
+        lexical_index=BM25MemoryIndex(),
+        embedder=HashEmbedder(),
+        settings=Settings(cache_enabled=False),
+    )
+    chunks = offline.run(relative, index_version="v1")
+    assert chunks
 
 
 def test_refusal_on_empty_index() -> None:

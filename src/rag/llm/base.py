@@ -7,6 +7,8 @@ from rag.schemas import Usage
 
 @runtime_checkable
 class LLMClient(Protocol):
+    """Text completion backend."""
+
     model_name: str
 
     def complete(self, prompt: str) -> tuple[str, Usage]: ...

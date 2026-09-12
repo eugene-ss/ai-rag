@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Protocol
 
 from rag.schemas import AclTags, Document
+from rag.utils.hashing import sha256_hex
 
 
 class SourceConnector(Protocol):
@@ -19,9 +20,7 @@ DEFAULT_ACL = AclTags(tenant="default", allow_groups=frozenset({"public"}))
 
 
 def checksum_bytes(data: bytes) -> str:
-    import hashlib
-
-    return hashlib.sha256(data).hexdigest()
+    return sha256_hex(data)
 
 
 def guess_mime(path: Path) -> str:

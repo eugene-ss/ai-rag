@@ -15,7 +15,7 @@ from rag.settings import get_settings
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.log_dir)
     init_state(settings=settings)
     yield
 

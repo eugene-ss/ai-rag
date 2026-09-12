@@ -4,3 +4,8 @@ collection_alias: docs_live
 data_root: data
 refusal_score_threshold: 0.01
 log_level: INFO
+cache_ttl_seconds: 3600
+semantic_cache_enabled: true
+semantic_cache_threshold: 0.95
+llm_max_attempts: 3
+llm_timeout_seconds: 30

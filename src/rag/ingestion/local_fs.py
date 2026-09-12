@@ -11,7 +11,8 @@ class LocalFSConnector:
     """Ingest documents from a local filesystem directory."""
 
     def __init__(self, root: Path | str, *, pattern: str = "**/*") -> None:
-        self.root = Path(root)
+        # Resolved eagerly: file URIs require an absolute path.
+        self.root = Path(root).expanduser().resolve()
         self.pattern = pattern
 
     def list_uris(self) -> Iterator[str]:

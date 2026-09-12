@@ -11,7 +11,8 @@ from rag.settings import get_settings
 
 
 def main(argv: list[str] | None = None) -> int:
-    configure_logging(get_settings().log_level)
+    _settings = get_settings()
+    configure_logging(_settings.log_level, _settings.log_dir)
     parser = argparse.ArgumentParser(prog="rag", description="RAG offline jobs CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 

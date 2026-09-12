@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import hashlib
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 from rag.schemas.principal import AclTags
+from rag.utils.hashing import short_id
 
 
 def derive_chunk_id(
@@ -15,8 +15,7 @@ def derive_chunk_id(
     index_version: str,
 ) -> str:
     """Deterministic chunk id so reindexing is idempotent and diffable."""
-    payload = f"{doc_id}|{ordinal}|{chunker_version}|{index_version}"
-    return hashlib.sha256(payload.encode()).hexdigest()[:24]
+    return short_id(doc_id, str(ordinal), chunker_version, index_version)
 
 
 class Chunk(BaseModel):
@@ -29,6 +28,7 @@ class Chunk(BaseModel):
     span: tuple[int, int]
     acl: AclTags
     index_version: str
+    embedding_model: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

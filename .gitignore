@@ -25,13 +25,11 @@ htmlcov/
 *.pem
 credentials.json
 
-# Data (raw and derived stay out of git)
-data/raw/**
-data/interim/**
-data/processed/**
-data/golden/**
+# Data (raw and derived stay out of git; only the layout is tracked)
+data/**
+!data/**/
+!data/README.md
 !data/**/.gitkeep
-!data/**/README.md
 
 # IDE / OS
 .idea/
@@ -42,5 +40,8 @@ Thumbs.db
 
 # Runtime
 *.log
+logs/**
+!logs/.gitkeep
+!logs/README.md
 .cache/
 tmp/

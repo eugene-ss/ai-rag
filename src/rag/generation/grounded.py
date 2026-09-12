@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from rag.generation.base import LLMClient
 from rag.generation.citations import resolve_citations
 from rag.generation.refusal import refused_answer, should_refuse
+from rag.llm.base import LLMClient
 from rag.observability.tracing import current_trace_id, span
 from rag.prompts import get as get_prompt
 from rag.schemas import Answer, ScoredChunk, Usage

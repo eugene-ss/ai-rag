@@ -42,7 +42,13 @@ class Settings(BaseSettings):
     dense_weight: float = 1.0
     lexical_weight: float = 1.0
     cache_enabled: bool = True
+    cache_ttl_seconds: int = 3600
+    semantic_cache_enabled: bool = True
+    semantic_cache_threshold: float = 0.95
+    llm_max_attempts: int = 3
+    llm_timeout_seconds: float = 30.0
     log_level: str = "INFO"
+    log_dir: Path | None = None
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     qdrant_url: str = Field(default="http://localhost:6333", validation_alias="QDRANT_URL")
     opensearch_url: str = Field(default="http://localhost:9200", validation_alias="OPENSEARCH_URL")
@@ -59,6 +65,7 @@ class Settings(BaseSettings):
             "dense_weight": self.dense_weight,
             "lexical_weight": self.lexical_weight,
             "cache_enabled": self.cache_enabled,
+            "semantic_cache_enabled": self.semantic_cache_enabled,
             **base,
         }
 

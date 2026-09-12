@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from rag.utils.text import normalize_whitespace
+
 
 def rewrite_query(query: str) -> list[str]:
     """Normalize and lightly expand a user query.
@@ -9,7 +11,7 @@ def rewrite_query(query: str) -> list[str]:
     Production systems swap this for an LLM rewrite prompt; the contract is a
     list of rewritten strings (primary first).
     """
-    cleaned = re.sub(r"\s+", " ", query.strip())
+    cleaned = normalize_whitespace(query)
     if not cleaned:
         return []
     variants = [cleaned]

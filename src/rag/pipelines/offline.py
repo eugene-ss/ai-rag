@@ -67,8 +67,13 @@ class OfflinePipeline:
                     all_chunks.extend(chunks)
             attrs["chunks"] = len(all_chunks)
 
-            with span("embed_index"):
+            with span("embed_index", embedding_model=self.embedder.model_name):
                 if all_chunks:
+                    # Stamp the embedding model so a model swap invalidates the index.
+                    all_chunks = [
+                        c.model_copy(update={"embedding_model": self.embedder.model_name})
+                        for c in all_chunks
+                    ]
                     vectors = self.embedder.embed([c.text for c in all_chunks])
                     self.vector_store.upsert(all_chunks, vectors)
                     self.lexical_index.upsert(all_chunks)

@@ -32,3 +32,21 @@ reindex:
 fmt:
     uv run ruff format src tests
     uv run ruff check --fix src tests
+
+# --- containers ---
+
+build:
+    docker compose build
+
+up:
+    docker compose up -d
+
+down:
+    docker compose down
+
+logs:
+    docker compose logs -f api
+
+# One-shot offline indexing job inside the stack.
+docker-reindex:
+    docker compose run --rm worker

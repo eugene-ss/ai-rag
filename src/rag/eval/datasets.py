@@ -17,6 +17,21 @@ class GoldenExample(BaseModel):
     expected_tools: list[str] = Field(default_factory=list)
     metadata: dict[str, str] = Field(default_factory=dict)
 
+    # --- agent trajectory expectations -------------------------------------
+    # These describe the shape a correct answer should take, not just its
+    # content, so the agent gate can measure the behaviours that distinguish it
+    # from single-shot retrieval. Both default to the single-round case, so
+    # retrieval-only datasets are unaffected.
+    retrieval_rounds: int = Field(
+        default=1,
+        ge=1,
+        description="Retrieval rounds a correct trajectory needs. >1 marks a multi-hop question.",
+    )
+    expect_self_correction: bool = Field(
+        default=False,
+        description="Whether the agent should recover from a rejected draft rather than degrade.",
+    )
+
 
 def load_golden(path: Path | str) -> list[GoldenExample]:
     p = Path(path)

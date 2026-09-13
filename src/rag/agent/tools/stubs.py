@@ -1,7 +1,9 @@
-"""Declared but unimplemented egress tools.
+"""Declared but unimplemented tools.
 
 They exist so the registry, egress gate, and planner prompt surface are real
-before the backends are. Calling them raises MissingBackendError.
+before the backends are. Both report `available = False`, so the registry never
+offers them to the planner and a turn cannot spend budget discovering that they
+do not work. Calling one directly still raises MissingBackendError.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ class WebSearchTool(ToolMixin):
     name = "web_search"
     description = (
         "Search the public web for up-to-date information not in the corpus. "
-        "Requires egress permission. Currently unavailable."
+        "Requires egress permission."
     )
     parameters: ClassVar[dict[str, Any]] = {
         "type": "object",
@@ -33,6 +35,10 @@ class WebSearchTool(ToolMixin):
         "additionalProperties": False,
     }
     requires_egress = True
+
+    @property
+    def available(self) -> bool:
+        return False
 
     async def run(
         self,
@@ -49,7 +55,7 @@ class GraphQueryTool(ToolMixin):
     """Knowledge-graph query. Declared only; needs offline extraction + store."""
 
     name = "graph_query"
-    description = "Query the knowledge graph for entities and relations. Currently unavailable."
+    description = "Query the knowledge graph for entities and relations."
     parameters: ClassVar[dict[str, Any]] = {
         "type": "object",
         "properties": {
@@ -62,6 +68,10 @@ class GraphQueryTool(ToolMixin):
         "additionalProperties": False,
     }
     requires_egress = False
+
+    @property
+    def available(self) -> bool:
+        return False
 
     async def run(
         self,

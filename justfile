@@ -83,7 +83,8 @@ eval-agent:
     uv run rag eval-agent \
         --dataset tests/fixtures/golden_agent.jsonl \
         --index-source tests/fixtures/corpus \
-        --max-avg-steps 3 --max-avg-cost 0.05 --min-success-rate 1.0
+        --max-avg-steps 3 --max-avg-cost 0.05 --min-success-rate 1.0 \
+        --min-trajectory-rate 1.0
 
 # --- demo --------------------------------------------------------------------
 

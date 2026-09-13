@@ -44,13 +44,22 @@ class ToolRegistry:
         return [t.spec() for t in self.allowed_for(principal, allow_egress=allow_egress)]
 
     def allowed_for(self, principal: Principal, *, allow_egress: bool = False) -> list[Tool]:
-        """Drop egress tools unless the tenant holds the grant.
+        """Tools the planner may be offered: available, and egress-cleared.
+
+        Unavailable tools are withheld because a planner can only avoid a tool it
+        was never offered. Leaving one in the schema and relying on its
+        description to warn the model off costs a step and a tool call per
+        attempt, which is budget the turn never gets back.
 
         `principal` is accepted for future per-tenant allow-lists; today the
-        gate is the boolean `allow_egress` flag from settings.
+        egress gate is the boolean `allow_egress` flag from settings.
         """
         _ = principal
-        return [tool for tool in self._tools.values() if allow_egress or not tool.requires_egress]
+        return [
+            tool
+            for tool in self._tools.values()
+            if tool.available and (allow_egress or not tool.requires_egress)
+        ]
 
     async def execute(
         self,
@@ -77,6 +86,16 @@ class ToolRegistry:
                 name=call.name,
                 ok=False,
                 error="egress_denied",
+            )
+        # Registered but not offered. Reachable when a model names a tool it was
+        # never shown, or when a backend went down mid-turn after specs() ran.
+        if not tool.available:
+            METRICS.incr("agent_tool_calls", tool=call.name, ok="false")
+            return ToolResult(
+                call_id=call.id,
+                name=call.name,
+                ok=False,
+                error=f"tool_unavailable:{call.name}",
             )
         try:
             arguments = validate_arguments(call.arguments, tool.parameters)

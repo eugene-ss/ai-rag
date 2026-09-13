@@ -79,6 +79,15 @@ def build_parser() -> argparse.ArgumentParser:
     agent_p.add_argument("--max-avg-steps", type=float, default=4.0)
     agent_p.add_argument("--max-avg-cost", type=float, default=0.05)
     agent_p.add_argument("--min-success-rate", type=float, default=1.0)
+    agent_p.add_argument(
+        "--min-trajectory-rate",
+        type=float,
+        default=1.0,
+        help=(
+            "Exit non-zero if fewer than this fraction of examples took the shape "
+            "they declare (retrieval_rounds, expect_self_correction)"
+        ),
+    )
 
     return parser
 
@@ -165,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
                 max_avg_steps=args.max_avg_steps,
                 max_avg_cost=args.max_avg_cost,
                 min_success_rate=args.min_success_rate,
+                min_trajectory_rate=args.min_trajectory_rate,
             )
         except SystemExit as exc:
             print(f"error: {exc}", file=sys.stderr)

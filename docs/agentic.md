@@ -38,17 +38,22 @@ fallback that cites the top chunk is deliberately disabled in agent mode.
 
 ## Tools
 
-| Tool | Status | Egress |
-|---|---|---|
-| `retrieval_search` | Implemented — wraps `OnlinePipeline.retrieve_only` | No |
-| `web_search` | Declared stub (`MissingBackendError`) | Yes |
-| `graph_query` | Declared stub (`MissingBackendError`) | Yes |
+| Tool | Status | Egress | Offered to the planner |
+|---|---|---|---|
+| `retrieval_search` | Implemented — wraps `OnlinePipeline.retrieve_only` | No | Yes |
+| `web_search` | Declared stub (`MissingBackendError`) | Yes | No — `available = False` |
+| `graph_query` | Declared stub (`MissingBackendError`) | No | No — `available = False` |
 
 Non-negotiable properties:
 
 - **Principal is runtime-injected**, never chosen by the model.
 - **Arguments are schema-validated** before execution (rejects unexpected fields).
 - **Egress tools are hidden** unless `agent_allow_egress` is granted.
+- **Unavailable tools are hidden**, always. A planner can only avoid a tool it was
+  never offered; a call it makes anyway costs a step and a tool call before
+  failing. `available` is also how a tool whose backend is down withdraws itself —
+  a runtime state no description can express. `execute()` re-checks it, because a
+  model can name a tool it was never shown.
 
 Tool results are delivered as `role=tool` messages. The system prompt states that
 tool content is data, never instructions. A dedicated injection test asserts that
@@ -106,10 +111,26 @@ cost**, not only answer quality:
 just eval-agent
 # or
 uv run rag eval-agent --dataset tests/fixtures/golden_agent.jsonl \
-  --max-avg-steps 3 --max-avg-cost 0.05
+  --max-avg-steps 3 --max-avg-cost 0.05 --min-trajectory-rate 1.0
 ```
 
 Real-model agent eval is a separate nightly job.
+
+### Trajectory expectations
+
+A golden example may declare the *shape* a correct trajectory takes, not only
+the answer:
+
+| Field | Meaning |
+|---|---|
+| `retrieval_rounds` | Retrieval rounds the question genuinely needs. `>1` marks it multi-hop. |
+| `expect_self_correction` | The agent must recover from a rejected draft rather than degrade. |
+
+`TrajectoryOK` in the report is the fraction of examples whose turn met those
+expectations, and `--min-trajectory-rate` gates it. This is separate from
+`Success` on purpose: a multi-hop example answered in a single round is
+*cheaper* than expected, so every cost gate stays green while the behaviour the
+example exists to prove never happened.
 
 ## Related
 

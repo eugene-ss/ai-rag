@@ -35,6 +35,10 @@ class AgentEvalCaseResult:
     cost_per_correct: float
     fallback_used: bool
     refused: bool
+    # Did the turn take the shape the example says a correct one should? An
+    # answer that happens to be right after skipping a retrieval round it needed
+    # is not evidence that multi-round reasoning works.
+    trajectory_ok: bool = True
 
 
 @dataclass
@@ -49,6 +53,7 @@ class AgentEvalReport:
     avg_cost_per_correct: float
     fallback_rate: float
     refusal_rate: float
+    trajectory_rate: float = 1.0
     cases: list[AgentEvalCaseResult] = field(default_factory=list)
 
     @classmethod
@@ -65,6 +70,7 @@ class AgentEvalReport:
             avg_cost_per_correct=sum(c.cost_per_correct for c in cases) / n,
             fallback_rate=sum(1 for c in cases if c.fallback_used) / n,
             refusal_rate=sum(1 for c in cases if c.refused) / n,
+            trajectory_rate=sum(1 for c in cases if c.trajectory_ok) / n,
             cases=cases,
         )
 
@@ -79,6 +85,7 @@ def format_agent_report(report: AgentEvalReport) -> str:
             f"  AvgCost=${report.avg_cost_usd:.4f}"
             f"  Cost/Correct=${report.avg_cost_per_correct:.4f}",
             f"  FallbackRate={report.fallback_rate:.3f}  RefusalRate={report.refusal_rate:.3f}",
+            f"  TrajectoryOK={report.trajectory_rate:.3f}",
         ]
     )
 
@@ -116,9 +123,22 @@ class AgentEvalRunner:
                     cost_per_correct=cost_per_correct(cost, success),
                     fallback_used=answer.fallback_used,
                     refused=answer.refused,
+                    trajectory_ok=_trajectory_ok(ex, answer),
                 )
             )
         return AgentEvalReport.from_cases(cases)
+
+
+def _trajectory_ok(ex: GoldenExample, answer: AgentAnswer) -> bool:
+    """Whether the turn took the shape `ex` says a correct one should.
+
+    Deliberately a floor, not an equality: spending more retrieval rounds than
+    expected is a cost regression that `avg_steps` already gates, while spending
+    fewer means the example was not exercising what it claims to.
+    """
+    if answer.tool_calls < ex.retrieval_rounds:
+        return False
+    return not (ex.expect_self_correction and answer.self_corrections < 1)
 
 
 def _tools_from_answer(answer: AgentAnswer) -> list[str]:

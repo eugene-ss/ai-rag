@@ -40,11 +40,20 @@ chunker upgrade.
 
 ### Agent golden examples
 
-Agent eval adds `expected_tools` so tool-selection precision is measurable:
+Agent eval adds `expected_tools` so tool-selection precision is measurable, plus
+two fields describing the *shape* a correct trajectory takes:
 
 ```json
 {"id": "a1", "question": "Compare hybrid and dense retrieval.", "relevant_doc_ids": ["hybrid_retrieval"], "expected_tools": ["retrieval_search"]}
+{"id": "a5", "question": "How does ACL pushdown relate to hybrid retrieval?", "relevant_doc_ids": ["acl_security", "hybrid_retrieval"], "expected_tools": ["retrieval_search"], "retrieval_rounds": 2}
+{"id": "a6", "question": "Which stages belong to the offline pipeline?", "relevant_doc_ids": ["pipeline_separation"], "expected_tools": ["retrieval_search"], "expect_self_correction": true}
 ```
+
+`retrieval_rounds` and `expect_self_correction` default to the single-round case,
+so retrieval-only datasets need no changes. Without them the set could only
+measure single-shot retrieval: the two behaviours that distinguish an agent from
+one-pass RAG — multiple rounds and recovery from a rejected draft — were
+invisible to the gate.
 
 Deterministic agent CI uses `EchoChatLLM` and gates on **average steps and cost**,
 not only task success — a change that doubles steps is a regression even when

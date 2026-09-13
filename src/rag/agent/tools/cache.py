@@ -21,11 +21,19 @@ def tool_result_cache_key(
     tool: str,
     arguments: dict[str, Any],
     principal: Principal,
+    index_version: str = "",
 ) -> str:
+    """Key a tool result by tool, canonical arguments, ACL scope, and index version.
+
+    `index_version` is part of the key because retrieval results are only valid
+    for the corpus that produced them: without it, a promotion keeps serving
+    passages from the previous index for the whole cache TTL.
+    """
     payload = {
         "tool": tool,
         "args": arguments,
         "acl": acl_fingerprint(principal),
+        "index_version": index_version,
     }
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     return "tool:" + hashlib.sha256(raw.encode()).hexdigest()
@@ -45,10 +53,16 @@ class ToolResultCache:
         tool: str,
         arguments: dict[str, Any],
         principal: Principal,
+        index_version: str = "",
     ) -> ToolResult | None:
         if not self._enabled:
             return None
-        key = tool_result_cache_key(tool=tool, arguments=arguments, principal=principal)
+        key = tool_result_cache_key(
+            tool=tool,
+            arguments=arguments,
+            principal=principal,
+            index_version=index_version,
+        )
         raw = self._cache.get(key)
         if raw is None:
             return None
@@ -64,10 +78,16 @@ class ToolResultCache:
         arguments: dict[str, Any],
         principal: Principal,
         result: ToolResult,
+        index_version: str = "",
     ) -> None:
         if not self._enabled or not result.ok:
             return
-        key = tool_result_cache_key(tool=tool, arguments=arguments, principal=principal)
+        key = tool_result_cache_key(
+            tool=tool,
+            arguments=arguments,
+            principal=principal,
+            index_version=index_version,
+        )
         # Drop call_id from the cached payload; the registry rebinds it per call.
         cached = result.model_copy(update={"call_id": ""})
         self._cache.set(key, cached.model_dump_json(), ttl_seconds=self._ttl)

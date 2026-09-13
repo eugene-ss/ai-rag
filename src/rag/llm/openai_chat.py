@@ -76,8 +76,7 @@ class OpenAIChatLLM:
         usage = Usage(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
-            total_tokens=getattr(raw_usage, "total_tokens", prompt_tokens + completion_tokens)
-            or 0,
+            total_tokens=getattr(raw_usage, "total_tokens", prompt_tokens + completion_tokens) or 0,
             cost_usd=estimate_cost_usd(self.model_name, prompt_tokens, completion_tokens),
             model=self.model_name,
         )

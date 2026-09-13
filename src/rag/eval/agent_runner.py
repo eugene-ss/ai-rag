@@ -76,7 +76,8 @@ def format_agent_report(report: AgentEvalReport) -> str:
             f"  Success={report.success_rate:.3f}  AvgSteps={report.avg_steps:.2f}",
             f"  StepEff={report.avg_step_efficiency:.3f}  ToolPrec={report.avg_tool_precision:.3f}",
             f"  SelfCorr={report.avg_self_correction_rate:.3f}",
-            f"  AvgCost=${report.avg_cost_usd:.4f}  Cost/Correct=${report.avg_cost_per_correct:.4f}",
+            f"  AvgCost=${report.avg_cost_usd:.4f}"
+            f"  Cost/Correct=${report.avg_cost_per_correct:.4f}",
             f"  FallbackRate={report.fallback_rate:.3f}  RefusalRate={report.refusal_rate:.3f}",
         ]
     )
@@ -95,9 +96,7 @@ class AgentEvalRunner:
         cases: list[AgentEvalCaseResult] = []
         for ex in examples:
             reset_trace()
-            answer: AgentAnswer = await self.runtime.run(
-                ex.question, principal=self.principal
-            )
+            answer: AgentAnswer = await self.runtime.run(ex.question, principal=self.principal)
             success = task_success(answer)
             predicted_tools = list(answer.tools_used) or _tools_from_answer(answer)
             cost = answer.usage.cost_usd
@@ -109,9 +108,7 @@ class AgentEvalRunner:
                     step_efficiency=step_efficiency(
                         answer.steps_taken, budget_steps=self.budget_steps
                     ),
-                    tool_precision=tool_selection_precision(
-                        predicted_tools, ex.expected_tools
-                    ),
+                    tool_precision=tool_selection_precision(predicted_tools, ex.expected_tools),
                     self_correction_rate=self_correction_rate(
                         answer.self_corrections, answer.steps_taken
                     ),

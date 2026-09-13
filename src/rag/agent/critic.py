@@ -10,6 +10,7 @@ import json
 import re
 from typing import Any
 
+from rag.agent.evidence import render_sources
 from rag.llm.chat import ChatLLM, Message
 from rag.observability.logging import get_logger
 from rag.prompts import get as get_prompt
@@ -22,25 +23,19 @@ log = get_logger("agent.critic")
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
-def format_sources_for_prompt(sources: list[Source]) -> str:
-    """Render sources for planner/critic prompts."""
-    if not sources:
-        return "(none)"
-    parts: list[str] = []
-    for src in sources:
-        header = f"[{src.ref}] kind={src.kind.value} doc={src.doc_id} score={src.score:.4f}"
-        if src.title:
-            header += f" title={src.title}"
-        parts.append(f"{header}\n{src.quote}")
-    return "\n\n".join(parts)
-
-
 class Critic:
     """LLM-as-judge over a draft answer and its sources."""
 
-    def __init__(self, llm: ChatLLM, *, prompt_version: str = "v1") -> None:
+    def __init__(
+        self,
+        llm: ChatLLM,
+        *,
+        prompt_version: str = "v1",
+        max_evidence_chars: int = 6000,
+    ) -> None:
         self._llm = llm
         self._prompt_version = prompt_version
+        self._max_evidence_chars = max_evidence_chars
 
     async def evaluate(
         self,
@@ -53,7 +48,7 @@ class Critic:
         prompt = template.render(
             question=question,
             draft=draft,
-            sources=format_sources_for_prompt(sources),
+            sources=render_sources(sources, max_chars=self._max_evidence_chars),
         )
         completion = await self._llm.chat([Message(role="user", content=prompt)], tools=None)
         verdict = _parse_verdict(completion.text)

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from rag.api.deps import AppState, build_state
 from rag.api.errors import RagError, rag_error_handler, unhandled_error_handler
-from rag.api.middleware import TraceMiddleware
+from rag.api.middleware import TimeoutMiddleware, TraceMiddleware
 from rag.api.routes import health, query
 from rag.observability.logging import configure_logging, get_logger
 from rag.settings import Settings, get_settings
@@ -58,6 +58,12 @@ def create_app(
         lifespan=lifespan,
     )
 
+    # Added first so it runs innermost of the two: the trace middleware still
+    # logs and labels the 504 it produces.
+    application.add_middleware(
+        TimeoutMiddleware,
+        timeout_seconds=resolved.request_timeout_seconds,
+    )
     application.add_middleware(TraceMiddleware)
     if resolved.cors_allow_origins:
         application.add_middleware(

@@ -1,8 +1,17 @@
-"""Per-turn budgets that keep an unbounded agent loop safe in a request path.
+"""Per-turn budget accounting for the agent loop.
 
 An agent without a budget is a cost-amplification attack waiting to happen.
-Every chargeable resource — steps, tool calls, tokens, dollars, wall clock —
-is tracked; the first exhausted dimension stops the loop.
+Every chargeable resource — steps, tool calls, tokens, dollars, wall clock — is
+tracked, and the first exhausted *terminal* dimension stops the loop.
+
+The terminal/gate distinction matters. Steps, tool calls, tokens, cost and wall
+clock are terminal: spending one means the turn must end. Critique rounds are
+not — spending them means "stop asking the critic", and the agent must still be
+allowed to finish. Collapsing the two is how `max_critique_rounds=0` came to
+mean "never invoke the planner at all".
+
+`Budget` itself lives in `rag.schemas.agent`, because `Settings` and the API
+request model both need it and neither may import the agent package.
 """
 
 from __future__ import annotations
@@ -10,33 +19,10 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from rag.schemas.agent import StopReason
+from rag.schemas.agent import Budget, StopReason
 from rag.schemas.answer import Usage
 
-
-@dataclass(frozen=True)
-class Budget:
-    """Hard caps for one agent turn. Caller-supplied values are clamped by the server."""
-
-    max_steps: int = 6
-    max_tool_calls: int = 10
-    max_critique_rounds: int = 2
-    max_tokens: int = 20_000
-    max_cost_usd: float = 0.10
-    max_wall_clock_seconds: float = 30.0
-
-    def clamp(self, ceiling: Budget) -> Budget:
-        """Never raise a caller budget above the server ceiling."""
-        return Budget(
-            max_steps=min(self.max_steps, ceiling.max_steps),
-            max_tool_calls=min(self.max_tool_calls, ceiling.max_tool_calls),
-            max_critique_rounds=min(self.max_critique_rounds, ceiling.max_critique_rounds),
-            max_tokens=min(self.max_tokens, ceiling.max_tokens),
-            max_cost_usd=min(self.max_cost_usd, ceiling.max_cost_usd),
-            max_wall_clock_seconds=min(
-                self.max_wall_clock_seconds, ceiling.max_wall_clock_seconds
-            ),
-        )
+__all__ = ["Budget", "BudgetTracker"]
 
 
 @dataclass
@@ -69,14 +55,20 @@ class BudgetTracker:
     def elapsed_seconds(self) -> float:
         return time.perf_counter() - self.started_at
 
-    def exhausted(self) -> StopReason | None:
-        """Return the stop reason for the first exhausted dimension, else None."""
+    def remaining_seconds(self) -> float:
+        """Wall clock left in this turn. Never negative."""
+        return max(0.0, self.budget.max_wall_clock_seconds - self.elapsed_seconds())
+
+    def terminal_stop(self) -> StopReason | None:
+        """Stop reason for the first exhausted *terminal* dimension, else None.
+
+        Critique rounds are deliberately absent: they gate the critic, not the
+        turn. See the module docstring.
+        """
         if self.steps >= self.budget.max_steps:
             return StopReason.BUDGET_EXHAUSTED
         if self.tool_calls >= self.budget.max_tool_calls:
             return StopReason.BUDGET_EXHAUSTED
-        if self.critique_rounds >= self.budget.max_critique_rounds:
-            return StopReason.CRITIC_EXHAUSTED
         if self.tokens >= self.budget.max_tokens:
             return StopReason.BUDGET_EXHAUSTED
         if self.cost_usd >= self.budget.max_cost_usd:

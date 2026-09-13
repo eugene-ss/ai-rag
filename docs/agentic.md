@@ -77,9 +77,12 @@ Per-tenant concurrency is also capped (`RAG_AGENT_MAX_CONCURRENT_PER_TENANT`).
 Answer-cache scope for agent turns includes mode, tool allow-list, and budget
 caps — otherwise two agent configurations collide on the same query.
 
-A separate **tool-result cache** keys on `(tool, canonical args, ACL fingerprint)`.
-That is where the savings live: agents re-retrieve similar things within and
-across turns.
+A separate **tool-result cache** keys on
+`(tool, canonical args, ACL fingerprint, index_version)`. That is where the
+savings live: agents re-retrieve similar things within and across turns. The
+index version is part of the key because retrieval results are only valid for
+the corpus that produced them — without it, promoting a new index keeps serving
+passages from the old one for the whole cache TTL.
 
 Traces are not returned in API responses unless `agent_include_trace` is on.
 
@@ -103,7 +106,7 @@ cost**, not only answer quality:
 just eval-agent
 # or
 uv run rag eval-agent --dataset tests/fixtures/golden_agent.jsonl \
-  --max-avg-steps 4 --max-avg-cost 0.05
+  --max-avg-steps 3 --max-avg-cost 0.05
 ```
 
 Real-model agent eval is a separate nightly job.

@@ -149,6 +149,7 @@ class OnlinePipeline:
         details: dict[str, Any] = {"collection_alias": self.settings.collection_alias}
 
         store = self.retriever.vector_store
+        alias_version: str | None = None
         try:
             alias_version = store.resolve_alias(self.settings.collection_alias)
             checks["index_alias"] = bool(alias_version)
@@ -158,7 +159,10 @@ class OnlinePipeline:
             details["index_error"] = str(exc)
 
         try:
-            count = store.count()
+            # Count the version the alias publishes, not whatever this process
+            # was built with: otherwise a replica reports ready while querying
+            # a collection the promotion moved away from.
+            count = store.count(alias_version)
             checks["index_populated"] = count > 0
             details["chunk_count"] = count
         except Exception as exc:

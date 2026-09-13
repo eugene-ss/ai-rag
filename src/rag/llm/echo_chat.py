@@ -88,4 +88,4 @@ class EchoChatLLM:
 
 
 # Protocol structural check — EchoChatLLM must satisfy ChatLLM.
-_: type[ChatLLM] = EchoChatLLM  # type: ignore[assignment, misc]
+_: type[ChatLLM] = EchoChatLLM

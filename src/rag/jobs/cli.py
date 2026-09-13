@@ -69,9 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
         "eval-agent",
         help="Run hermetic agent evaluation (EchoChatLLM; gates steps/cost)",
     )
-    agent_p.add_argument(
-        "--dataset", type=Path, default=Path("tests/fixtures/golden_agent.jsonl")
-    )
+    agent_p.add_argument("--dataset", type=Path, default=Path("tests/fixtures/golden_agent.jsonl"))
     agent_p.add_argument(
         "--index-source",
         type=Path,
@@ -160,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         context = BackendContext.from_settings(settings)
         try:
-            report = run_agent_eval(
+            agent_report = run_agent_eval(
                 args.dataset,
                 context=context,
                 index_source=args.index_source,
@@ -171,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
         except SystemExit as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        print(format_agent_report(report))
+        print(format_agent_report(agent_report))
         return 0
 
     return 1

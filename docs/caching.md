@@ -29,6 +29,12 @@ scopes, therefore different keys, therefore no shared entries. Cross-tenant
 contamination is structurally impossible rather than prevented by a check that
 someone could forget.
 
+The scope deliberately contains *only* what ACL evaluation reads, so two callers
+with identical reach share entries. That sharing is the point: a per-subject
+scope would give every user in a tenant a private copy of results they are all
+equally entitled to, and the hit rate would collapse. If ACL evaluation ever
+becomes subject-dependent, `acl_fingerprint` must grow in the same change.
+
 Folding these four things into the scope also makes invalidation automatic:
 
 | Change | Effect |

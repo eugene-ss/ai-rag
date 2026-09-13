@@ -43,6 +43,7 @@ class OpenSearchLexicalIndex:
         url: str = "http://localhost:9200",
         index: str = "docs",
         timeout: float = 10.0,
+        client: Any | None = None,
     ) -> None:
         try:
             from opensearchpy import OpenSearch
@@ -50,7 +51,16 @@ class OpenSearchLexicalIndex:
             raise MissingBackendError("OpenSearchLexicalIndex", "opensearch") from exc
 
         self.index = index
-        self._client = OpenSearch(hosts=[url], timeout=timeout)
+        # Indices are named `<prefix>__<version>`; reads follow the version the
+        # caller resolved, not the one this process started with.
+        self.prefix = index.rsplit("__", 1)[0] if "__" in index else index
+        self._client = client if client is not None else OpenSearch(hosts=[url], timeout=timeout)
+
+    def index_for(self, index_version: str | None = None) -> str:
+        """Physical index holding `index_version`."""
+        if not index_version:
+            return self.index
+        return f"{self.prefix}__{index_version}"
 
     def ensure_index(self) -> None:
         if not self._client.indices.exists(index=self.index):
@@ -100,7 +110,7 @@ class OpenSearchLexicalIndex:
                 }
             },
         }
-        response = self._client.search(index=self.index, body=body)
+        response = self._client.search(index=self.index_for(index_version), body=body)
         hits = response.get("hits", {}).get("hits", [])
         results: list[ScoredChunk] = []
         for rank, hit in enumerate(hits, start=1):
@@ -128,8 +138,8 @@ class OpenSearchLexicalIndex:
         filters.append({"bool": {"should": should, "minimum_should_match": 1}})
         return filters
 
-    def count(self) -> int:
-        return int(self._client.count(index=self.index)["count"])
+    def count(self, index_version: str | None = None) -> int:
+        return int(self._client.count(index=self.index_for(index_version))["count"])
 
 
 def _to_source(chunk: Chunk) -> dict[str, Any]:

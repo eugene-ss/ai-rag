@@ -32,8 +32,11 @@ jobs:
           # same default interpreter.
           python-version: ${{ matrix.python-version }}
 
+      # The qdrant/opensearch extras are client libraries only — no server is
+      # started. Without them the adapter tests silently skip, which is how a
+      # broken ACL filter and mis-routed alias reads reached us unnoticed.
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra qdrant --extra opensearch
 
       - name: Confirm the interpreter under test
         run: uv run python -c "import sys; assert sys.version.startswith('${{ matrix.python-version }}'), sys.version; print(sys.version)"
@@ -47,6 +50,10 @@ jobs:
         run: uv run mypy src/rag main.py
 
       - name: Tests
+        # RAG_REQUIRE_BACKEND_EXTRAS turns "extra missing, test skipped" into a
+        # failure. Locally the skip is a convenience; in CI it is a blind spot.
+        env:
+          RAG_REQUIRE_BACKEND_EXTRAS: "1"
         run: uv run pytest --cov --cov-report=term-missing
 
   quality-gate:
@@ -84,7 +91,7 @@ jobs:
           uv run rag eval-agent \
             --dataset tests/fixtures/golden_agent.jsonl \
             --index-source tests/fixtures/corpus \
-            --max-avg-steps 4 \
+            --max-avg-steps 3 \
             --max-avg-cost 0.05 \
             --min-success-rate 1.0
 

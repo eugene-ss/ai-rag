@@ -63,19 +63,12 @@ class RetrievalTool(ToolMixin):
         # retrieve_only is sync; run it off the event loop.
         import asyncio
 
-        result = await asyncio.to_thread(
-            self._pipeline.retrieve_only, query, principal=principal
-        )
+        result = await asyncio.to_thread(self._pipeline.retrieve_only, query, principal=principal)
         scored = result.results[:top_k]
         # Defense in depth: re-check ACL even though retrieval already filtered.
-        sources = [
-            source_from_scored(s)
-            for s in scored
-            if is_allowed(principal, s.chunk.acl)
-        ]
+        sources = [source_from_scored(s) for s in scored if is_allowed(principal, s.chunk.acl)]
         lines = [
-            f"[{src.ref}] score={src.score:.4f} doc={src.doc_id}\n{src.quote}"
-            for src in sources
+            f"[{src.ref}] score={src.score:.4f} doc={src.doc_id}\n{src.quote}" for src in sources
         ]
         content = "\n\n".join(lines) if lines else "No authorised passages found."
         return ToolResult(

@@ -30,6 +30,10 @@ class VectorStore(Protocol):
         """Publish `index_version` under `alias`. The atomic cutover."""
         ...
 
-    def count(self) -> int:
-        """Number of indexed vectors. Used by readiness checks."""
+    def count(self, index_version: str | None = None) -> int:
+        """Number of indexed vectors, optionally for one version.
+
+        Readiness must count the version the alias publishes; counting whatever
+        this process was built with can report ready while serving nothing.
+        """
         ...

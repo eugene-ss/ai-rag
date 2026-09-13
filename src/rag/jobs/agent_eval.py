@@ -73,8 +73,7 @@ def run_agent_eval(
         script.append(
             ScriptedTurn(
                 content=(
-                    (ex.reference_answer or "Grounded answer from the corpus.")
-                    + f" [{chunk_id}]"
+                    (ex.reference_answer or "Grounded answer from the corpus.") + f" [{chunk_id}]"
                 )
             )
         )
@@ -107,19 +106,13 @@ def run_agent_eval(
     )
 
     if min_success_rate is not None and report.success_rate < min_success_rate:
-        msg = (
-            f"agent success_rate {report.success_rate:.3f} "
-            f"below threshold {min_success_rate:.3f}"
-        )
+        msg = f"agent success_rate {report.success_rate:.3f} below threshold {min_success_rate:.3f}"
         raise SystemExit(msg)
     if max_avg_steps is not None and report.avg_steps > max_avg_steps:
         msg = f"agent avg_steps {report.avg_steps:.2f} above threshold {max_avg_steps:.2f}"
         raise SystemExit(msg)
     if max_avg_cost is not None and report.avg_cost_usd > max_avg_cost:
-        msg = (
-            f"agent avg_cost_usd {report.avg_cost_usd:.4f} "
-            f"above threshold {max_avg_cost:.4f}"
-        )
+        msg = f"agent avg_cost_usd {report.avg_cost_usd:.4f} above threshold {max_avg_cost:.4f}"
         raise SystemExit(msg)
     return report
 

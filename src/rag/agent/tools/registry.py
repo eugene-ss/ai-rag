@@ -50,11 +50,7 @@ class ToolRegistry:
         gate is the boolean `allow_egress` flag from settings.
         """
         _ = principal
-        return [
-            tool
-            for tool in self._tools.values()
-            if allow_egress or not tool.requires_egress
-        ]
+        return [tool for tool in self._tools.values() if allow_egress or not tool.requires_egress]
 
     async def execute(
         self,
@@ -63,6 +59,7 @@ class ToolRegistry:
         principal: Principal,
         budget: BudgetTracker,
         allow_egress: bool = False,
+        index_version: str = "",
     ) -> ToolResult:
         tool = self._tools.get(call.name)
         if tool is None:
@@ -93,7 +90,10 @@ class ToolRegistry:
             )
         if self._result_cache is not None:
             cached = self._result_cache.get(
-                tool=call.name, arguments=arguments, principal=principal
+                tool=call.name,
+                arguments=arguments,
+                principal=principal,
+                index_version=index_version,
             )
             if cached is not None:
                 METRICS.incr("agent_tool_calls", tool=call.name, ok="true", cached="true")
@@ -117,6 +117,7 @@ class ToolRegistry:
                 arguments=arguments,
                 principal=principal,
                 result=result,
+                index_version=index_version,
             )
         METRICS.incr("agent_tool_calls", tool=call.name, ok=str(result.ok).lower())
         return result

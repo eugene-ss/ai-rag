@@ -52,8 +52,10 @@ class MemoryVectorStore:
     def set_alias(self, alias: str, index_version: str) -> None:
         self._aliases[alias] = index_version
 
-    def count(self) -> int:
-        return len(self._items)
+    def count(self, index_version: str | None = None) -> int:
+        if not index_version:
+            return len(self._items)
+        return sum(1 for chunk, _ in self._items.values() if chunk.index_version == index_version)
 
 
 def _cosine(a: list[float], b: list[float]) -> float:

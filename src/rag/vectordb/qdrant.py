@@ -39,6 +39,7 @@ class QdrantVectorStore:
         collection: str = "docs",
         dimensions: int = 1536,
         alias_collection: str | None = None,
+        client: Any | None = None,
     ) -> None:
         try:
             from qdrant_client import QdrantClient
@@ -46,10 +47,26 @@ class QdrantVectorStore:
             raise MissingBackendError("QdrantVectorStore", "qdrant") from exc
 
         self.collection = collection
+        # Physical collections are named `<prefix>__<version>`. Keep the prefix so
+        # reads can be routed to whichever version the alias currently publishes,
+        # rather than to whichever version this process happened to start with.
+        self.prefix = collection.rsplit("__", 1)[0] if "__" in collection else collection
         self.dimensions = dimensions
         self._alias_collection = alias_collection or f"{collection}__aliases"
-        self._client = QdrantClient(url=url, api_key=api_key)
+        self._client = client if client is not None else QdrantClient(url=url, api_key=api_key)
         self._aliases: dict[str, str] = {}
+
+    def collection_for(self, index_version: str | None = None) -> str:
+        """Physical collection holding `index_version`.
+
+        Writes target the version being built (`self.collection`); reads target
+        the version the caller resolved from the alias. Without this, promoting
+        `v2` leaves the API querying the `v1` collection while filtering for
+        `index_version=v2`, which matches nothing and looks like an empty corpus.
+        """
+        if not index_version:
+            return self.collection
+        return f"{self.prefix}__{index_version}"
 
     # --- schema ------------------------------------------------------------
 
@@ -123,7 +140,7 @@ class QdrantVectorStore:
         index_version: str | None = None,
     ) -> list[ScoredChunk]:
         response = self._client.query_points(
-            collection_name=self.collection,
+            collection_name=self.collection_for(index_version),
             query=vector,
             limit=top_k,
             query_filter=self._acl_filter(
@@ -162,6 +179,9 @@ class QdrantVectorStore:
                 )
             )
         # A chunk is visible when it is tenant-wide (no groups) or shares a group.
+        # The alternatives belong *inside* MinShould: `min_should` is its own
+        # clause taking `conditions` + `min_count`, not an int paired with
+        # `should`. Passing an int raises ValidationError on every search.
         group_clauses: list[Any] = [
             models.IsEmptyCondition(is_empty=models.PayloadField(key="allow_groups"))
         ]
@@ -172,7 +192,10 @@ class QdrantVectorStore:
                     match=models.MatchAny(any=sorted(acl.groups)),
                 )
             )
-        return models.Filter(must=must, should=group_clauses, min_should=1)
+        return models.Filter(
+            must=must,
+            min_should=models.MinShould(conditions=group_clauses, min_count=1),
+        )
 
     # --- aliases -----------------------------------------------------------
 
@@ -189,21 +212,30 @@ class QdrantVectorStore:
         return self._aliases.get(alias)
 
     def set_alias(self, alias: str, index_version: str) -> None:
+        """Publish `index_version` under `alias` in one atomic operation batch.
+
+        Delete-then-create in a single call, because creating an alias that
+        already exists is not a move — rollback to a previous version would fail
+        against a live cluster.
+        """
         from qdrant_client import models
 
-        target = f"{self.collection.rsplit('__', 1)[0]}__{index_version}"
+        target = self.collection_for(index_version)
         self._aliases[alias] = index_version
         self._client.update_collection_aliases(
             change_aliases_operations=[
+                models.DeleteAliasOperation(delete_alias=models.DeleteAlias(alias_name=alias)),
                 models.CreateAliasOperation(
                     create_alias=models.CreateAlias(collection_name=target, alias_name=alias)
-                )
+                ),
             ]
         )
         log.info("qdrant alias %s -> %s", alias, target)
 
-    def count(self) -> int:
-        return int(self._client.count(collection_name=self.collection, exact=True).count)
+    def count(self, index_version: str | None = None) -> int:
+        return int(
+            self._client.count(collection_name=self.collection_for(index_version), exact=True).count
+        )
 
 
 def _point_id(chunk_id: str) -> str:

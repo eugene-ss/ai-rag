@@ -8,6 +8,8 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from rag.schemas.agent import Budget
+
 VectorBackend = Literal["memory", "qdrant"]
 LexicalBackend = Literal["memory", "opensearch"]
 EmbeddingBackend = Literal["hash", "openai"]
@@ -244,10 +246,8 @@ class Settings(BaseSettings):
     def index_registry_path(self) -> Path:
         return self.index_registry_file or (self.configs_root / "index_versions.yaml")
 
-    def agent_budget(self) -> "Budget":
+    def agent_budget(self) -> Budget:
         """Server-side ceiling for agent turns; caller budgets are clamped to this."""
-        from rag.agent.budget import Budget
-
         return Budget(
             max_steps=self.agent_max_steps,
             max_tool_calls=self.agent_max_tool_calls,

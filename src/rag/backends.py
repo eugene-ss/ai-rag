@@ -176,9 +176,7 @@ def build_agent_runtime(
     from rag.agent import AgentRuntime, Critic
 
     chat = chat_llm or build_chat_llm(settings)
-    registry = tools or build_tool_registry(
-        settings, pipeline, cache=cache or pipeline.cache
-    )
+    registry = tools or build_tool_registry(settings, pipeline, cache=cache or pipeline.cache)
     return AgentRuntime(
         chat_llm=chat,
         tools=registry,

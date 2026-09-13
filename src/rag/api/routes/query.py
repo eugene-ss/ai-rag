@@ -12,7 +12,7 @@ from rag.cache.keys import agent_cache_params, cache_key
 from rag.observability.logging import get_logger
 from rag.query.route import QueryMode, should_use_agent
 from rag.schemas import Answer, Principal
-from rag.schemas.agent import AgentAnswer
+from rag.schemas.agent import ANSWERABLE_STOPS, AgentAnswer
 
 router = APIRouter(tags=["query"])
 log = get_logger("api.query")
@@ -102,9 +102,10 @@ async def _run_agent(
     assert state.agent is not None
     ceiling = state.settings.agent_budget()
     budget = body.budget_override(ceiling)
-    tool_names = [t.name for t in state.agent.tools.allowed_for(
-        principal, allow_egress=state.agent.allow_egress
-    )]
+    tool_names = [
+        t.name
+        for t in state.agent.tools.allowed_for(principal, allow_egress=state.agent.allow_egress)
+    ]
     params = agent_cache_params(
         mode="agent",
         allow_egress=state.agent.allow_egress,
@@ -145,11 +146,15 @@ async def _run_agent(
     async with state.agent_semaphore_for(principal.tenant):
         answer = await state.agent.run(body.query, principal=principal, budget=budget)
 
+    # Only cache turns the agent completed under its own power. Degraded turns
+    # (fallback, refusal, budget exhaustion) are situational and must not be
+    # replayed to later callers as if they were the real answer.
     if (
         state.settings.cache_enabled
         and not answer.refused
         and isinstance(answer, AgentAnswer)
-        and answer.stop_reason.value == "answered"
+        and not answer.fallback_used
+        and answer.stop_reason in ANSWERABLE_STOPS
     ):
         state.pipeline.cache.set(
             key,

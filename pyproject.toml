@@ -112,9 +112,22 @@ module = [
 ]
 ignore_missing_imports = true
 
+# numpy arrives transitively with the qdrant extra and ships stubs that use
+# 3.12-only syntax, which mypy parses under our declared python_version = 3.11.
+# Skip it rather than raise the floor: we still support 3.11 at runtime.
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true
+
 [tool.coverage.run]
 source = ["src/rag"]
 branch = true
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "\\.\\.\\."]
+# A ratchet, not a target. Set just under the current number so a change that
+# adds untested code fails the build; raise it as coverage improves. Deliberately
+# global: per-module floors invite arguing with the tool instead of writing tests.
+fail_under = 74
+show_missing = true

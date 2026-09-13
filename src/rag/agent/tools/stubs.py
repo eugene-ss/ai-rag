@@ -49,10 +49,7 @@ class GraphQueryTool(ToolMixin):
     """Knowledge-graph query. Declared only; needs offline extraction + store."""
 
     name = "graph_query"
-    description = (
-        "Query the knowledge graph for entities and relations. "
-        "Currently unavailable."
-    )
+    description = "Query the knowledge graph for entities and relations. Currently unavailable."
     parameters: ClassVar[dict[str, Any]] = {
         "type": "object",
         "properties": {

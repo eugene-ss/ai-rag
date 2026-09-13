@@ -21,7 +21,6 @@ def test_rrf_prefers_items_appearing_in_both_lists() -> None:
     dense = [_scored("a", 1), _scored("b", 2), _scored("c", 3)]
     lexical = [_scored("b", 1), _scored("a", 2), _scored("d", 3)]
     fused = reciprocal_rank_fusion([dense, lexical], k=60)
-    assert fused[0].chunk.chunk_id in {"a", "b"}
     top_ids = {s.chunk.chunk_id for s in fused[:2]}
     assert top_ids == {"a", "b"}
     assert fused[0].retriever == "fused"
